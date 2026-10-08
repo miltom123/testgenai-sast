@@ -1,0 +1,78 @@
+name: TestGenAI Enterprise DevSecOps Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  quality-gate:
+    name: Lint, Typecheck & Vitest Coverage
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./backend
+    env:
+      NODE_ENV: test
+      DATABASE_URL: postgresql://test:test@localhost:5432/calidad_test?schema=public
+      JWT_SECRET: ci_secret_key_de_integracion_continua_1234567890
+      AI_PROVIDER_DEFAULT: gemini
+
+    steps:
+      - name: Checkout Código Fuente
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: 'npm'
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Instalar Dependencias
+        run: npm ci
+
+      - name: Generar cliente Prisma
+        run: npm run prisma:generate
+
+      - name: Verificación Estricta de Tipado (TypeScript)
+        run: npm run typecheck
+
+      - name: Análisis Estático de Código (ESLint)
+        run: npm run lint
+
+      - name: Ejecutar Pruebas Automatizadas Unitarias & Heurísticas
+        run: npm test
+
+  security-scan:
+    name: Escaneo de Seguridad SAST & Vulnerabilidades (Trivy)
+    runs-on: ubuntu-latest
+    needs: quality-gate
+
+    steps:
+      - name: Checkout Código
+        uses: actions/checkout@v4
+
+      - name: Escaneo de Vulnerabilidades en Dependencias con Trivy
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          ignore-unfixed: true
+          format: 'table'
+          severity: 'CRITICAL,HIGH'
+
+  docker-verify:
+    name: Verificación de Build de Contenedores Docker
+    runs-on: ubuntu-latest
+    needs: quality-gate
+    env:
+      POSTGRES_PASSWORD: ci_configuration_example_only_123456
+      JWT_SECRET: ci_configuration_example_only_1234567890
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validar Sintaxis de Docker Compose
+        run: docker compose -f docker-compose.yml config --quiet

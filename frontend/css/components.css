@@ -1,0 +1,12 @@
+/* ==========================================================================
+   Components Styles - TestGenAI Modern UI System
+   Resolves Finding #12: Modularized Component Sub-systems & Design Tokens
+   ========================================================================== */
+
+/* Sub-system Component Imports */
+@import url('./components/buttons-badges.css?v=white3');
+@import url('./components/cards-panels.css?v=white3');
+@import url('./components/forms-inputs.css?v=white3');
+@import url('./components/review-cards.css?v=white3');
+@import url('./components/tables-modals.css?v=white3');
+@import url('./components/auth-feedback.css?v=white3');

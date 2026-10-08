@@ -1,0 +1,797 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TestGenAI — Generación y Revisión de Casos de Prueba con IA</title>
+  <meta name="description" content="Plataforma de derivación y auditoría de casos de prueba basada en IA (Google Gemini / OpenAI) con trazabilidad ISTQB." />
+  
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet" />
+
+  <script>
+    // Limpieza de Service Worker y cachés anteriores
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations().then(function(regs) {
+        for (var r of regs) { r.unregister(); }
+      });
+    }
+    if ('caches' in window) {
+      caches.keys().then(function(keys) {
+        for (var k of keys) { caches.delete(k); }
+      });
+    }
+    try { localStorage.removeItem('testgenai_theme'); } catch(e) {}
+  </script>
+
+  <!-- Stylesheets -->
+  <link rel="stylesheet" href="css/variables.css?v=clean_white_v4" />
+  <link rel="stylesheet" href="css/layout.css?v=clean_white_v4" />
+  <link rel="stylesheet" href="css/components.css?v=clean_white_v4" />
+  <link rel="stylesheet" href="css/animations.css?v=clean_white_v4" />
+  <link rel="stylesheet" href="css/accessibility.css?v=clean_white_v4" />
+  <link rel="stylesheet" href="css/premium.css?v=clean_white_v4" />
+
+  <!-- Favicon SVG -->
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%236366f1'><polygon points='13 2 3 14 12 14 11 22 21 10 12 10 13 2'/></svg>" />
+</head>
+<body>
+  <!-- ====================================================================
+       Authentication Screen (Login / Register) - Real Accounts Only
+       ==================================================================== -->
+  <div id="auth-screen" class="auth-screen" style="display: none;">
+    <div class="auth-container">
+      <div class="auth-brand">
+        <div class="auth-logo-badge">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+          </svg>
+        </div>
+        <h1 class="auth-title font-display">TestGenAI <span class="badge-version">MVP</span></h1>
+        <p class="auth-subtitle">Generación y auditoría de casos de prueba con IA real</p>
+      </div>
+
+      <div class="auth-card">
+        <div class="auth-tabs">
+          <button type="button" class="auth-tab-btn active" data-tab="login">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"></path><polyline points="10 17 15 12 10 7"></polyline><line x1="15" y1="12" x2="3" y2="12"></line></svg>
+            Iniciar Sesión
+          </button>
+          <button type="button" class="auth-tab-btn" data-tab="register">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="8.5" cy="7" r="4"></circle><line x1="20" y1="8" x2="20" y2="14"></line><line x1="23" y1="11" x2="17" y2="11"></line></svg>
+            Crear Cuenta
+          </button>
+        </div>
+
+        <!-- Formulario Iniciar Sesión -->
+        <form id="form-login" class="auth-form">
+          <div class="form-group">
+            <label class="form-label" for="login-email">Correo Electrónico</label>
+            <div class="input-with-icon">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg>
+              <input type="email" id="login-email" class="form-input" placeholder="usuario@dominio.com" required autocomplete="username" />
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="login-password">Contraseña</label>
+            <div class="input-with-icon">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+              <input type="password" id="login-password" class="form-input" placeholder="••••••••••••" required autocomplete="current-password" />
+            </div>
+          </div>
+
+          <button type="submit" id="btn-submit-login" class="btn btn-primary btn-auth-submit">
+            <span>Ingresar al Sistema</span>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
+          </button>
+        </form>
+
+        <!-- Formulario Registro (Rol fijado por servidor a QA_TESTER) -->
+        <form id="form-register" class="auth-form" style="display: none;">
+          <div class="form-group">
+            <label class="form-label" for="reg-fullname">Nombre Completo *</label>
+            <div class="input-with-icon">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+              <input type="text" id="reg-fullname" class="form-input" placeholder="Nombre y Apellidos" required />
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="reg-email">Correo Electrónico *</label>
+            <div class="input-with-icon">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg>
+              <input type="email" id="reg-email" class="form-input" placeholder="usuario@dominio.com" required />
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="reg-password">Contraseña (Mínimo 6 caracteres) *</label>
+            <div class="input-with-icon">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+              <input type="password" id="reg-password" class="form-input" placeholder="••••••••••••" minlength="6" required />
+            </div>
+          </div>
+
+          <button type="submit" id="btn-submit-register" class="btn btn-primary btn-auth-submit">
+            <span>Crear Cuenta</span>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
+          </button>
+        </form>
+      </div>
+
+      <div class="auth-footer-notes">
+        <span>🔒 Sesión segura mediante cookies HttpOnly</span> • <span>PostgreSQL</span>
+      </div>
+    </div>
+  </div>
+
+  <div id="app">
+    <!-- ====================================================================
+         Sidebar Navigation (7 vistas del MVP limpio)
+         ==================================================================== -->
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <div class="brand-logo">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+          </svg>
+        </div>
+        <div class="brand-info">
+          <span class="brand-title font-display">TestGenAI</span>
+          <span class="brand-badge">MVP QA</span>
+        </div>
+      </div>
+
+      <nav class="sidebar-nav">
+        <div class="nav-section-label">MENÚ PRINCIPAL</div>
+        <a class="nav-item active" data-view="dashboard" id="nav-item-dashboard" title="Resumen del proyecto">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
+          <span>Inicio</span>
+        </a>
+        <a class="nav-item" data-view="projects" id="nav-item-projects" title="Administrar proyectos">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2"></rect><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path></svg>
+          <span>Proyectos</span>
+        </a>
+        <a class="nav-item" data-view="requirements" id="nav-item-requirements" title="Gestionar requisitos del software">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>
+          <span>Requisitos</span>
+        </a>
+        <a class="nav-item" data-view="test-cases" id="nav-item-test-cases" title="Revisión individual y auditoría de casos">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 11 12 14 22 4"></polyline><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg>
+          <span>Casos de Prueba</span>
+          <span class="nav-badge" id="sidebar-pending-badge" style="display:none;"></span>
+        </a>
+        <a class="nav-item" data-view="traceability" id="nav-item-traceability" title="Matriz de cobertura de requisitos y casos vigentes">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
+          <span>Trazabilidad</span>
+        </a>
+        <a class="nav-item" data-view="metrics" id="nav-item-metrics" title="Métricas reales e historial de ejecuciones IA">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>
+          <span>Métricas & IA</span>
+        </a>
+        <a class="nav-item" data-view="settings" id="nav-item-settings" title="Configuración de proveedores y usuarios">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+          <span>Configuración</span>
+        </a>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="backend-status">
+          <div class="status-indicator">
+            <span class="status-dot" id="backend-status-dot"></span>
+            <span id="backend-status-text">Conectado</span>
+          </div>
+        </div>
+
+        <div class="user-card">
+          <div class="user-avatar" id="sidebar-user-avatar">Q</div>
+          <div class="user-details">
+            <div class="user-name" id="sidebar-user-name">Usuario</div>
+            <div class="user-role-badge" id="sidebar-user-role">QA_TESTER</div>
+          </div>
+          <button type="button" class="btn-sidebar-logout" id="btn-sidebar-logout" title="Cerrar Sesión">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+          </button>
+        </div>
+      </div>
+    </aside>
+
+    <!-- ====================================================================
+         Main Wrapper & Header
+         ==================================================================== -->
+    <div class="main-wrapper">
+      <header class="topbar">
+        <div class="topbar-left">
+          <button class="btn-icon" id="btn-toggle-sidebar" style="display:none;" title="Menú">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+          </button>
+          <h1 class="current-view-title" id="current-view-title">Inicio</h1>
+        </div>
+
+        <div class="topbar-right">
+          <!-- Dark / Light Theme Toggle -->
+          <button type="button" class="btn-icon btn-toggle-theme" title="Alternar Modo Oscuro / Claro" aria-label="Cambiar tema visual">
+            <span class="theme-icon-sun" style="font-size:1rem;">☀️</span>
+            <span class="theme-icon-moon" style="display:none; font-size:1rem;">🌙</span>
+          </button>
+
+          <div class="project-selector-wrapper">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path></svg>
+            <select class="project-select" id="project-select" aria-label="Proyecto Activo">
+              <option value="">Selecciona un proyecto</option>
+            </select>
+          </div>
+        </div>
+      </header>
+
+      <!-- View Content Container -->
+      <main class="content-area" id="content-area">
+        <!-- Rendered dynamically by views -->
+      </main>
+    </div>
+  </div>
+
+  <!-- ====================================================================
+       MODALS ROOT PORTAL
+       ==================================================================== -->
+  <section id="modals-container" aria-label="Contenedor de Diálogos Modales">
+
+  <!-- Modal: New Project -->
+  <div class="modal-overlay" id="modal-new-project">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <div class="modal-title">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2"></rect><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path></svg>
+          Nuevo Proyecto
+        </div>
+        <button class="btn-icon modal-close" title="Cerrar">&times;</button>
+      </div>
+      <form id="form-new-project">
+        <div class="modal-body">
+          <div class="form-group">
+            <label class="form-label" for="project-name-input">Nombre del Proyecto *</label>
+            <input type="text" id="project-name-input" class="form-input" placeholder="Nombre descriptivo del proyecto" required />
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="project-desc-input">Descripción / Alcance</label>
+            <textarea id="project-desc-input" class="form-textarea" placeholder="Descripción breve del software a verificar..."></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary modal-close">Cancelar</button>
+          <button type="submit" class="btn btn-primary">Crear Proyecto</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal: Edit Project -->
+  <div class="modal-overlay" id="modal-edit-project">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <div class="modal-title">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="2"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
+          Editar Proyecto
+        </div>
+        <button class="btn-icon modal-close" title="Cerrar">&times;</button>
+      </div>
+      <form id="form-edit-project">
+        <input type="hidden" id="edit-project-id" />
+        <div class="modal-body">
+          <div class="form-group">
+            <label class="form-label" for="edit-project-name">Nombre del Proyecto *</label>
+            <input type="text" id="edit-project-name" class="form-input" required />
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="edit-project-desc">Descripción / Alcance</label>
+            <textarea id="edit-project-desc" class="form-textarea"></textarea>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="edit-project-status">Estado del Proyecto</label>
+            <select class="form-select" id="edit-project-status">
+              <option value="ACTIVE">Activo</option>
+              <option value="ARCHIVED">Archivado</option>
+            </select>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary modal-close">Cancelar</button>
+          <button type="submit" class="btn btn-primary">Guardar Cambios</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal: New Requirement -->
+  <div class="modal-overlay" id="modal-new-requirement">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <div class="modal-title">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
+          Nuevo Requisito Funcional
+        </div>
+        <button class="btn-icon modal-close" title="Cerrar">&times;</button>
+      </div>
+      <form id="form-new-requirement">
+        <div class="modal-body">
+          <div class="form-group">
+            <label class="form-label" for="req-title-input">Título del Requisito *</label>
+            <input type="text" id="req-title-input" class="form-input" placeholder="Ej: Autenticación de usuarios por contraseña" required />
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="req-desc-input">Descripción / Historia de Usuario *</label>
+            <textarea id="req-desc-input" class="form-textarea" placeholder="Describe lo que el usuario o sistema realiza..." required></textarea>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="req-criteria-input">
+              <span>Criterios de Aceptación (Gherkin o lista estructurada) *</span>
+            </label>
+            <textarea id="req-criteria-input" class="form-textarea code-font" style="min-height:120px;" placeholder="1. Criterio específico y verificable...&#10;2. Condiciones límite y manejo de errores..." required></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary modal-close">Cancelar</button>
+          <button type="submit" class="btn btn-primary">Guardar Requisito</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal: Edit Requirement (Versionado con snapshot) -->
+  <div class="modal-overlay" id="modal-edit-requirement">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <div class="modal-title">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)" stroke-width="2"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
+          Modificar Requisito Funcional
+        </div>
+        <button class="btn-icon modal-close" title="Cerrar">&times;</button>
+      </div>
+      <form id="form-edit-requirement">
+        <input type="hidden" id="edit-req-id" />
+        <input type="hidden" id="edit-req-expected-version" />
+        <div class="modal-body">
+          <div style="display:grid; grid-template-columns: 140px 1fr; gap:12px;">
+            <div class="form-group">
+              <label class="form-label" for="edit-req-code-display">Código</label>
+              <input type="text" id="edit-req-code-display" class="form-input" disabled />
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="edit-req-title">Título del Requisito *</label>
+              <input type="text" id="edit-req-title" class="form-input" required />
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="edit-req-desc">Descripción / Historia de Usuario *</label>
+            <textarea id="edit-req-desc" class="form-textarea" required></textarea>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="edit-req-criteria">
+              <span>Criterios de Aceptación *</span>
+            </label>
+            <textarea id="edit-req-criteria" class="form-textarea code-font" style="min-height:120px;" required></textarea>
+          </div>
+          <div style="background:rgba(245, 158, 11, 0.08); border:1px solid rgba(245, 158, 11, 0.3); border-radius:var(--radius-md); padding:10px 14px; font-size:0.8rem; color:#fbbf24;">
+            ⚠️ <strong>Control de Versiones:</strong> Al actualizar un requisito con casos existentes, se creará un snapshot histórico de versión y los casos previos se marcarán como pendientes de revisión por obsolescencia.
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary modal-close">Cancelar</button>
+          <button type="submit" class="btn btn-primary">Actualizar Requisito</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal: Import Requirements CSV / JSON -->
+  <div class="modal-overlay" id="modal-import-requirements">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <div class="modal-title">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+          Importar Requisitos (CSV o JSON)
+        </div>
+        <button class="btn-icon modal-close" title="Cerrar">&times;</button>
+      </div>
+      <form id="form-import-requirements">
+        <div class="modal-body">
+          <p style="font-size:0.83rem; color:var(--text-secondary); margin-bottom:10px;">
+            Pega tus requisitos en formato <strong>CSV</strong> (encabezados: <code>title,description,acceptanceCriteria</code>) o un arreglo en formato <strong>JSON</strong>:
+          </p>
+          <div class="form-group">
+            <textarea id="import-text-input" class="form-textarea code-font" style="min-height:180px;" placeholder='title,description,acceptanceCriteria&#10;"Recuperación de contraseña","Como usuario solicito enlace de recuperación","1. Debe enviar correo con token temporal. 2. Expira en 15 min."' required></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary modal-close">Cancelar</button>
+          <button type="submit" class="btn btn-primary">Validar e Importar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal: AI Generation Console (Solo Proveedores Reales) -->
+  <div class="modal-overlay" id="modal-ai-generate">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <div class="modal-title">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
+          Generar Casos de Prueba con IA Real
+        </div>
+        <button class="btn-icon modal-close" title="Cerrar">&times;</button>
+      </div>
+      <form id="form-ai-generate">
+        <input type="hidden" id="ai-gen-req-id" />
+        <div class="modal-body">
+          <div style="background:rgba(99, 102, 241, 0.08); border:1px solid rgba(99, 102, 241, 0.25); border-radius:var(--radius-md); padding:12px 16px; margin-bottom:14px;">
+            <div style="font-size:0.75rem; text-transform:uppercase; color:var(--text-muted); font-weight:700;">Requisito Objetivo</div>
+            <div id="ai-gen-req-label" style="font-size:0.95rem; font-weight:700; color:#fff; margin-top:2px;">REQ-XXX</div>
+          </div>
+
+          <div id="ai-provider-warning" style="display:none; background:rgba(239, 68, 68, 0.1); border:1px solid rgba(239, 68, 68, 0.3); border-radius:var(--radius-md); padding:12px; margin-bottom:14px; font-size:0.83rem; color:#fca5a5;">
+            ⚠️ No hay proveedores de IA configurados con API Key en el servidor. Configure <code>GEMINI_API_KEY</code> u <code>OPENAI_API_KEY</code> en las variables de entorno del backend para habilitar la generación.
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="ai-gen-provider">Proveedor de IA</label>
+            <select class="form-select" id="ai-gen-provider">
+              <option value="gemini" selected>Google Gemini</option>
+              <option value="openai">OpenAI</option>
+            </select>
+          </div>
+
+          <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
+            <div class="form-group">
+              <label class="form-label" for="ai-gen-model">Modelo</label>
+              <select class="form-select" id="ai-gen-model">
+                <option value="gemini-1.5-flash">gemini-1.5-flash</option>
+                <option value="gemini-1.5-pro">gemini-1.5-pro</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="ai-gen-temp">Temperatura</label>
+              <select class="form-select" id="ai-gen-temp">
+                <option value="0.1">0.1 (Determinista)</option>
+                <option value="0.2" selected>0.2 (Equilibrado)</option>
+                <option value="0.4">0.4 (Exploratorio)</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label style="display:flex; align-items:center; gap:8px; font-size:0.83rem; color:var(--text-secondary); cursor:pointer;">
+              <input type="checkbox" id="ai-gen-use-cache" checked />
+              <span>Usar caché de IA si ya existe una ejecución idéntica exitosa</span>
+            </label>
+          </div>
+
+          <!-- Progress animation container -->
+          <div id="ai-gen-progress" style="display:none; margin-top:10px; padding:14px; background:rgba(0,0,0,0.3); border-radius:var(--radius-md); text-align:center;">
+            <span class="spinner spinner-cyan"></span>
+            <div style="font-size:0.85rem; color:var(--cyan); margin-top:8px; font-weight:600;">
+              Llamando al proveedor de IA, validando esquema de salida y citando evidencia...
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary modal-close">Cancelar</button>
+          <button type="submit" id="btn-submit-ai-gen" class="btn btn-primary">Iniciar Generación</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal: Human Review & Edit Test Case (Human-in-the-Loop) -->
+  <div class="modal-overlay" id="modal-edit-testcase">
+    <div class="modal-dialog" style="max-width:650px;">
+      <div class="modal-header">
+        <div class="modal-title">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--info)" stroke-width="2"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
+          Revisar y Modificar Caso de Prueba
+        </div>
+        <button class="btn-icon modal-close" title="Cerrar">&times;</button>
+      </div>
+      <form id="form-edit-testcase">
+        <input type="hidden" id="edit-tc-id" />
+        <input type="hidden" id="edit-tc-expected-version" />
+        <div class="modal-body">
+          <div class="form-group">
+            <label class="form-label" for="edit-tc-title">Título del Caso de Prueba *</label>
+            <input type="text" id="edit-tc-title" class="form-input" required />
+          </div>
+
+          <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
+            <div class="form-group">
+              <label class="form-label" for="edit-tc-priority">Prioridad ISTQB</label>
+              <select class="form-select" id="edit-tc-priority">
+                <option value="high">Alta</option>
+                <option value="medium">Media</option>
+                <option value="low">Baja</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="edit-tc-evidence-status">Estado de Evidencia</label>
+              <select class="form-select" id="edit-tc-evidence-status">
+                <option value="derived">Derivado (Cita directa del requisito)</option>
+                <option value="suggested">Sugerido (Inferencia de QA)</option>
+                <option value="ambiguous">Ambiguo (Regla incompleta)</option>
+                <option value="conflict">Conflicto (Contradice otra regla)</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="edit-tc-preconditions">Precondiciones (una por línea)</label>
+            <textarea id="edit-tc-preconditions" class="form-textarea" style="min-height:70px;"></textarea>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="edit-tc-steps">Pasos de Ejecución (un paso por línea) *</label>
+            <textarea id="edit-tc-steps" class="form-textarea" style="min-height:100px;" required></textarea>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="edit-tc-testdata">Datos de Prueba (Test Data)</label>
+            <input type="text" id="edit-tc-testdata" class="form-input" />
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="edit-tc-expected">Resultado Esperado *</label>
+            <textarea id="edit-tc-expected" class="form-textarea" style="min-height:80px;" required></textarea>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="edit-tc-comments">Observaciones / Justificación de Auditoría</label>
+            <textarea id="edit-tc-comments" class="form-textarea" placeholder="Indica el motivo de los ajustes realizados para auditoría..."></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary modal-close">Cancelar</button>
+          <button type="submit" class="btn btn-primary">Guardar y Marcar Modificado</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal: Reject Test Case -->
+  <div class="modal-overlay" id="modal-reject-testcase">
+    <div class="modal-dialog" style="max-width:500px;">
+      <div class="modal-header">
+        <div class="modal-title" style="color:var(--error);">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>
+          Rechazar Caso de Prueba
+        </div>
+        <button class="btn-icon modal-close" title="Cerrar">&times;</button>
+      </div>
+      <form id="form-reject-testcase">
+        <input type="hidden" id="reject-tc-id" />
+        <input type="hidden" id="reject-tc-expected-version" />
+        <div class="modal-body">
+          <p id="reject-tc-code-label" style="font-size:0.9rem; font-weight:700; color:var(--text-primary); margin-bottom:12px;"></p>
+          <div class="form-group">
+            <label class="form-label" for="reject-reason-select">Motivo del Rechazo *</label>
+            <select class="form-select" id="reject-reason-select">
+              <option value="Alucinación / No sustentado en requisito">Alucinación / No sustentado en requisito</option>
+              <option value="Fuera de alcance">Fuera de alcance</option>
+              <option value="Caso duplicado o redundante">Caso duplicado o redundante</option>
+              <option value="Resultado esperado incorrecto o impreciso">Resultado esperado incorrecto o impreciso</option>
+              <option value="Datos de prueba inválidos">Datos de prueba inválidos</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="reject-notes-input">Observaciones de Auditoría *</label>
+            <textarea id="reject-notes-input" class="form-textarea" placeholder="Explique brevemente por qué el caso es rechazado..." required></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary modal-close">Cancelar</button>
+          <button type="submit" class="btn btn-danger">Confirmar Rechazo</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal: Create Manual Test Case (RF-15) -->
+  <div class="modal-overlay" id="modal-manual-testcase">
+    <div class="modal-dialog" style="max-width:620px;">
+      <div class="modal-header">
+        <div class="modal-title">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
+          Crear Caso de Prueba Manual
+        </div>
+        <button class="btn-icon modal-close" title="Cerrar">&times;</button>
+      </div>
+      <form id="form-manual-testcase">
+        <input type="hidden" id="manual-tc-req-id" />
+        <div class="modal-body">
+          <p id="manual-tc-req-label" style="font-size:0.85rem; color:var(--text-secondary); margin-bottom:16px;"></p>
+
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:14px;">
+            <div class="form-group" style="margin-bottom:0;">
+              <label class="form-label" for="manual-tc-type">Tipo ISTQB *</label>
+              <select class="form-select" id="manual-tc-type" required>
+                <option value="positive">✅ Positivo</option>
+                <option value="negative">❌ Negativo</option>
+                <option value="alternative">🔀 Alternativo</option>
+                <option value="boundary">📐 Valor Límite</option>
+                <option value="validation">✔️ Validación</option>
+              </select>
+            </div>
+            <div class="form-group" style="margin-bottom:0;">
+              <label class="form-label" for="manual-tc-priority">Prioridad *</label>
+              <select class="form-select" id="manual-tc-priority" required>
+                <option value="high">🔴 Alta</option>
+                <option value="medium" selected>🟡 Media</option>
+                <option value="low">🟢 Baja</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="manual-tc-title">Título del Caso *</label>
+            <input type="text" class="form-input" id="manual-tc-title" placeholder="Ej: Login exitoso con credenciales válidas" required minlength="3" />
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="manual-tc-preconditions">Precondiciones <span style="color:var(--text-muted);">(una por línea)</span></label>
+            <textarea id="manual-tc-preconditions" class="form-textarea" rows="2" placeholder="El usuario está registrado&#10;El sistema está disponible"></textarea>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="manual-tc-steps">Pasos * <span style="color:var(--text-muted);">(uno por línea)</span></label>
+            <textarea id="manual-tc-steps" class="form-textarea" rows="3" placeholder="Navegar a la página de login&#10;Ingresar email válido&#10;Presionar Iniciar Sesión" required></textarea>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="manual-tc-testdata">Datos de Prueba</label>
+            <input type="text" class="form-input" id="manual-tc-testdata" placeholder="Ej: email=admin@test.com, password=Test123!" />
+            <div style="display:flex; flex-wrap:wrap; gap:6px; margin-top:8px;" id="synth-data-buttons">
+              <span style="font-size:0.75rem; color:var(--text-muted); align-self:center;">🎲 Asistente de Datos Sintéticos:</span>
+              <button type="button" class="btn-synth-data" data-type="ruc_valid" style="font-size:0.72rem; padding:3px 8px; border-radius:4px; border:1px solid var(--border-subtle); background:rgba(255,255,255,0.04); color:var(--text-secondary); cursor:pointer;">RUC Válido (SUNAT Mód 11)</button>
+              <button type="button" class="btn-synth-data" data-type="ruc_invalid" style="font-size:0.72rem; padding:3px 8px; border-radius:4px; border:1px solid var(--border-subtle); background:rgba(255,255,255,0.04); color:var(--text-secondary); cursor:pointer;">RUC Inválido</button>
+              <button type="button" class="btn-synth-data" data-type="dni" style="font-size:0.72rem; padding:3px 8px; border-radius:4px; border:1px solid var(--border-subtle); background:rgba(255,255,255,0.04); color:var(--text-secondary); cursor:pointer;">DNI (8 dígitos)</button>
+              <button type="button" class="btn-synth-data" data-type="card_luhn" style="font-size:0.72rem; padding:3px 8px; border-radius:4px; border:1px solid var(--border-subtle); background:rgba(255,255,255,0.04); color:var(--text-secondary); cursor:pointer;">Tarjeta Visa (Luhn)</button>
+              <button type="button" class="btn-synth-data" data-type="boundary_255" style="font-size:0.72rem; padding:3px 8px; border-radius:4px; border:1px solid var(--border-subtle); background:rgba(255,255,255,0.04); color:var(--text-secondary); cursor:pointer;">String 255 chars</button>
+              <button type="button" class="btn-synth-data" data-type="sqli" style="font-size:0.72rem; padding:3px 8px; border-radius:4px; border:1px solid var(--border-subtle); background:rgba(255,255,255,0.04); color:var(--text-secondary); cursor:pointer;">SQLi Pasivo</button>
+              <button type="button" class="btn-synth-data" data-type="xss" style="font-size:0.72rem; padding:3px 8px; border-radius:4px; border:1px solid var(--border-subtle); background:rgba(255,255,255,0.04); color:var(--text-secondary); cursor:pointer;">XSS Pasivo</button>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="manual-tc-expected">Resultado Esperado *</label>
+            <textarea id="manual-tc-expected" class="form-textarea" rows="2" placeholder="El sistema autentica al usuario y redirige al dashboard" required minlength="3"></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary modal-close">Cancelar</button>
+          <button type="submit" class="btn btn-primary">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
+            Crear Caso Manual
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal: Generate from ISTQB Template (RF-15) -->
+  <div class="modal-overlay" id="modal-template-generate">
+    <div class="modal-dialog" style="max-width:680px;">
+      <div class="modal-header">
+        <div class="modal-title">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="3" y1="9" x2="21" y2="9"></line><line x1="9" y1="21" x2="9" y2="9"></line></svg>
+          Generar desde Plantilla ISTQB
+        </div>
+        <button class="btn-icon modal-close" title="Cerrar">&times;</button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="template-req-id" />
+        <p id="template-req-label" style="font-size:0.85rem; color:var(--text-secondary); margin-bottom:16px;"></p>
+        <p style="font-size:0.82rem; color:var(--text-muted); margin-bottom:18px;">
+          Selecciona una categoría de plantilla. Se generarán casos de prueba deterministas (sin IA) como punto de partida para tu revisión.
+        </p>
+        <div id="template-categories-grid" style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+          <!-- Se llena dinámicamente -->
+        </div>
+      </div>
+      <div class="modal-footer" style="justify-content:space-between;">
+        <span id="template-selection-label" style="font-size:0.82rem; color:var(--text-muted);">Selecciona una categoría</span>
+        <div style="display:flex; gap:8px;">
+          <button type="button" class="btn btn-secondary modal-close">Cancelar</button>
+          <button type="button" class="btn btn-primary" id="btn-confirm-template" disabled>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
+            Generar Casos
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Generate from BVA (Boundary Value Analysis ISTQB) -->
+  <div class="modal-overlay" id="modal-bva-generate">
+    <div class="modal-dialog" style="max-width:720px;">
+      <div class="modal-header">
+        <div class="modal-title">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+          Análisis de Valores Límite (ISTQB 3-Point BVA & EP)
+        </div>
+        <button class="btn-icon modal-close" title="Cerrar">&times;</button>
+      </div>
+      <form id="form-bva-generate">
+        <div class="modal-body">
+          <input type="hidden" id="bva-req-id" />
+          <p id="bva-req-label" style="font-size:0.85rem; color:var(--text-secondary); margin-bottom:12px;"></p>
+          <p style="font-size:0.82rem; color:var(--text-muted); margin-bottom:16px;">
+            Diseño formal de pruebas deterministas de caja negra. Define la variable a probar y el sistema calculará matemáticamente los límites exactos (min, max), valores adyacentes (min-1, min+1, max-1, max+1), partición nominal y casos negativos.
+          </p>
+
+          <div style="display:grid; grid-template-columns: 2fr 1fr; gap:12px; margin-bottom:12px;">
+            <div class="form-group" style="margin-bottom:0;">
+              <label class="form-label" for="bva-var-name">Nombre de la Variable / Campo *</label>
+              <input type="text" class="form-input" id="bva-var-name" placeholder="Ej: Monto de transferencia, Edad, Longitud de clave" required minlength="2" value="Monto de Transferencia" />
+            </div>
+            <div class="form-group" style="margin-bottom:0;">
+              <label class="form-label" for="bva-var-type">Tipo de Variable *</label>
+              <select class="form-select" id="bva-var-type" required>
+                <option value="decimal" selected>Decimal / Moneda</option>
+                <option value="integer">Entero / Cantidad</option>
+                <option value="string_length">Longitud de Texto</option>
+              </select>
+            </div>
+          </div>
+
+          <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:12px; margin-bottom:16px;">
+            <div class="form-group" style="margin-bottom:0;">
+              <label class="form-label" for="bva-var-min">Límite Mínimo (Min) *</label>
+              <input type="number" step="any" class="form-input" id="bva-var-min" value="1.00" required />
+            </div>
+            <div class="form-group" style="margin-bottom:0;">
+              <label class="form-label" for="bva-var-max">Límite Máximo (Max) *</label>
+              <input type="number" step="any" class="form-input" id="bva-var-max" value="5000.00" required />
+            </div>
+            <div class="form-group" style="margin-bottom:0;">
+              <label class="form-label" for="bva-var-unit">Unidad (Opcional)</label>
+              <input type="text" class="form-input" id="bva-var-unit" placeholder="Ej: USD, PEN, años" value="USD" />
+            </div>
+          </div>
+
+          <!-- Live Preview -->
+          <div style="margin-top:16px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+              <span style="font-size:0.78rem; font-weight:700; text-transform:uppercase; color:var(--text-muted);">
+                Previsualización en Vivo de Casos Calculados (ISTQB CTFL v4.0)
+              </span>
+              <span id="bva-preview-count" class="badge badge-derived" style="font-size:0.75rem;">8 casos</span>
+            </div>
+            <div id="bva-live-preview-list" style="max-height:220px; overflow-y:auto; border:1px solid var(--border-subtle); border-radius:var(--radius-sm); background:rgba(0,0,0,0.2); padding:8px;">
+              <!-- Se calcula dinámicamente en tiempo real -->
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-footer" style="justify-content:space-between;">
+          <span style="font-size:0.8rem; color:var(--text-muted);">Técnica de Caja Negra: BVA 3-Point + Equivalence Partitioning</span>
+          <div style="display:flex; gap:8px;">
+            <button type="button" class="btn btn-secondary modal-close">Cancelar</button>
+            <button type="submit" class="btn btn-primary" id="btn-submit-bva">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+              Generar Casos BVA
+            </button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  </section> <!-- /#modals-container -->
+
+  <!-- Toast Notification Container -->
+  <div id="toast-container" class="toast-container"></div>
+
+  <!-- App Bootstrap Entry -->
+  <script type="module" src="js/app.js?v=clean_white_v4"></script>
+</body>
+</html>

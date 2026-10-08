@@ -1,0 +1,9 @@
+flowchart LR
+  U[Usuario] --> SPA[Frontend HTML CSS y JavaScript]
+  SPA --> API[Express API v1]
+  API --> UC[Casos de uso]
+  UC --> DOMAIN[Dominio y puertos]
+  UC --> ENGINE[Motor determinista ISTQB]
+  UC --> AI[Adaptadores Gemini y OpenAI]
+  DOMAIN --> PRISMA[Repositorios Prisma]
+  PRISMA --> DB[(PostgreSQL)]

@@ -1,0 +1,47 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: calidad_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Configure POSTGRES_PASSWORD con un valor hexadecimal aleatorio}
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, pg_isready -U postgres -d calidad_db]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+  migrate:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+      target: builder
+    command: [node, node_modules/prisma/build/index.js, migrate, deploy]
+    environment:
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@postgres:5432/calidad_db?schema=public
+      DIRECT_URL: postgresql://postgres:${POSTGRES_PASSWORD}@postgres:5432/calidad_db?schema=public
+    depends_on:
+      postgres:
+        condition: service_healthy
+  app:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    ports:
+      - "127.0.0.1:4000:4000"
+    environment:
+      NODE_ENV: production
+      PORT: 4000
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@postgres:5432/calidad_db?schema=public
+      DIRECT_URL: postgresql://postgres:${POSTGRES_PASSWORD}@postgres:5432/calidad_db?schema=public
+      JWT_SECRET: ${JWT_SECRET:?Configure JWT_SECRET con al menos 32 caracteres aleatorios}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:4000}
+      AI_PROVIDER_DEFAULT: gemini
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+volumes:
+  pgdata:

@@ -1,0 +1,101 @@
+name: Release y despliegue Terraform de verificación
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: release-infrastructure-main
+  cancel-in-progress: true
+jobs:
+  release:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      revision: ${{ steps.revision.outputs.sha }}
+      published: ${{ steps.publish.outputs.published }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+      - id: revision
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm ci --prefix backend && npm run prisma:generate --prefix backend && npm run build --prefix backend
+      - name: Empaquetar y crear release de la revisión validada
+        id: publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          current=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq '.object.sha')
+          if [ "$current" != "${{ steps.revision.outputs.sha }}" ]; then
+            echo 'Se omite el release de una revisión superada por un nuevo commit. Debe completarse CI de la revisión vigente.' >> "$GITHUB_STEP_SUMMARY"
+            echo 'published=false' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          tar -czf testgenai-release.tar.gz backend/dist backend/package.json backend/package-lock.json backend/prisma/schema.prisma backend/prisma/migrations backend/Dockerfile frontend docs/generated
+          gh release create "ci-${GITHUB_RUN_NUMBER}-${GITHUB_RUN_ATTEMPT}" testgenai-release.tar.gz --target "${{ steps.revision.outputs.sha }}" --title "TestGenAI CI ${GITHUB_RUN_NUMBER}" --notes "Build de la revisión validada por CI. El despliegue Terraform posterior verifica infraestructura efímera; no es una URL pública persistente."
+          echo 'published=true' >> "$GITHUB_OUTPUT"
+  infrastructure:
+    needs: release
+    if: needs.release.outputs.published == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.release.outputs.revision }}
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.12.2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Validar y aprovisionar infraestructura
+        run: |
+          mkdir -p reports
+          terraform -chdir=infra init -input=false
+          terraform -chdir=infra fmt -check > reports/terraform-format.txt
+          terraform -chdir=infra validate -json > reports/terraform-validation.json
+          date +%s > reports/start-time.txt
+          terraform -chdir=infra apply -auto-approve -input=false
+      - name: Migrar base de datos y verificar aplicación desplegada
+        env:
+          NODE_ENV: test
+          JWT_SECRET: ci_test_secret_minimo_32_caracteres
+          AI_PROVIDER_DEFAULT: gemini
+        run: |
+          npm ci --prefix backend
+          npm run prisma:generate --prefix backend
+          export DATABASE_URL="$(terraform -chdir=infra output -raw database_url)"
+          echo "::add-mask::$DATABASE_URL"
+          export DIRECT_URL="$DATABASE_URL"
+          npm run prisma:deploy --prefix backend
+          npx --prefix backend prisma migrate diff --from-url "$DATABASE_URL" --to-schema-datamodel backend/prisma/schema.prisma --exit-code > reports/schema-alignment.txt
+          curl --fail --retry 10 --retry-delay 3 http://127.0.0.1:14000/api/health > reports/health.json
+          curl --fail-with-body --retry 3 --retry-delay 2 http://127.0.0.1:14000/api/health/db > reports/health-db.json
+          curl --fail http://127.0.0.1:14000/ -o reports/home.html
+          grep -qi testgenai reports/home.html
+          node scripts/verify-infrastructure.cjs
+          printf '%s\n' 'Health HTTP: PASS' 'PostgreSQL HTTP: PASS' 'Frontend HTML: PASS' > reports/infrastructure-tests.txt
+      - name: Reportar alcance y costos
+        if: always()
+        run: |
+          node -e "const fs=require('fs');const t=fs.existsSync('reports/start-time.txt')?Number(fs.readFileSync('reports/start-time.txt')):Math.floor(Date.now()/1000);fs.writeFileSync('reports/costos.json',JSON.stringify({scope:'Docker efímero en runner GitHub Actions; no nube persistente',elapsedSeconds:Math.floor(Date.now()/1000)-t,externalCloudResourcesCreated:0,incrementalDockerResourceCostUSD:0,githubActionsBilling:'Consultar uso y facturación de la organización; no se conoce el costo monetario efectivo'},null,2))"
+      - name: Diagnosticar fallos del entorno efímero
+        if: failure()
+        run: docker logs testgenai-ci-app --tail 80
+      - name: Destruir exclusivamente recursos efímeros de esta ejecución
+        if: always()
+        run: terraform -chdir=infra destroy -auto-approve -input=false
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: infraestructura-tests-y-costos
+          path: reports/

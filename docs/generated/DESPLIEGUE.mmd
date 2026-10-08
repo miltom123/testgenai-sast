@@ -1,0 +1,6 @@
+flowchart LR
+  U[Navegador] --> APP[Contenedor Node 24 Express y SPA]
+  APP --> DB[(PostgreSQL 16)]
+  APP --> EXT[APIs de IA opcionales]
+  GH[GitHub] --> CI[GitHub Actions: pruebas y análisis]
+  CI --> IMG[Build Docker]

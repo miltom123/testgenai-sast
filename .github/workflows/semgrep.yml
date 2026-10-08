@@ -1,0 +1,26 @@
+name: Análisis Semgrep del proyecto
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install semgrep
+      - name: Analizar código y conservar hallazgos
+        run: |
+          mkdir -p reports
+          semgrep scan --config p/javascript --config p/typescript --json --output reports/semgrep.json backend/src frontend/js
+          echo 'El resultado requiere revisión. Este workflow conserva hallazgos y no declara todos resueltos.' >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: semgrep-hallazgos
+          path: reports/

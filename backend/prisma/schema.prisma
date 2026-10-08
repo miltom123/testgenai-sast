@@ -1,0 +1,310 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model User {
+  id           String        @id @default(uuid())
+  email        String        @unique
+  passwordHash String        @map("password_hash")
+  fullName     String        @map("full_name")
+  role         String        @default("QA_TESTER") // QA_TESTER, QA_LEAD, DEVELOPER, ADMIN
+  isActive     Boolean       @default(true) @map("is_active")
+  preferences  Json?         @default("{}")
+  createdAt    DateTime      @default(now()) @map("created_at")
+  updatedAt    DateTime      @updatedAt @map("updated_at")
+
+  projects            Project[]
+  reviews             TestCaseReview[]
+  sessions            AuthSession[]
+  requirementVersions RequirementVersion[]
+  specGenerations     SpecGeneration[]
+  aiGenerations       AiGeneration[]
+
+  @@map("users")
+}
+
+model AuthSession {
+  id           String    @id @default(uuid())
+  userId       String    @map("user_id")
+  tokenHash    String    @unique @map("token_hash")
+  userAgent    String?   @map("user_agent")
+  ipAddress    String?   @map("ip_address")
+  isRevoked    Boolean   @default(false) @map("is_revoked")
+  expiresAt    DateTime  @map("expires_at")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([tokenHash])
+  @@map("auth_sessions")
+}
+
+model Project {
+  id                    String        @id @default(uuid())
+  name                  String
+  description           String?
+  ownerId               String        @map("owner_id")
+  status                String        @default("ACTIVE") // ACTIVE, ARCHIVED
+  budgetUsd             Float?        @default(10.0) @map("budget_usd")
+  nextRequirementNumber Int           @default(1) @map("next_requirement_number")
+  nextUseCaseNumber     Int           @default(1) @map("next_use_case_number")
+  createdAt             DateTime      @default(now()) @map("created_at")
+  updatedAt             DateTime      @updatedAt @map("updated_at")
+
+  owner           User             @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+  requirements    Requirement[]
+  useCases        UseCase[]
+  specGenerations SpecGeneration[]
+  testRuns        TestRun[]
+
+  @@index([ownerId])
+  @@index([status])
+  @@map("projects")
+}
+
+// Ejecución del motor determinista de especificación (auditoría RF-12)
+model SpecGeneration {
+  id                  String   @id @default(uuid())
+  projectId           String   @map("project_id")
+  userId              String?  @map("user_id")
+  engineVersion       String   @map("engine_version")
+  depth               String   @default("standard") // basic, standard, exhaustive
+  inputName           String   @map("input_name")
+  inputDescription    String   @map("input_description")
+  inputHash           String   @map("input_hash")
+  actorsDetected      Json     @default("[]") @map("actors_detected")
+  modulesDetected     Json     @default("[]") @map("modules_detected")
+  entitiesDetected    Json     @default("[]") @map("entities_detected")
+  warnings            Json     @default("[]")
+  useCasesCreated     Int      @default(0) @map("use_cases_created")
+  requirementsCreated Int      @default(0) @map("requirements_created")
+  testCasesCreated    Int      @default(0) @map("test_cases_created")
+  useCasesSkipped     Int      @default(0) @map("use_cases_skipped")
+  requirementsSkipped Int      @default(0) @map("requirements_skipped")
+  durationMs          Int      @default(0) @map("duration_ms")
+  status              String   @default("SUCCEEDED") // SUCCEEDED, FAILED
+  errorMessage        String?  @map("error_message")
+  createdAt           DateTime @default(now()) @map("created_at")
+
+  project  Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user     User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  useCases UseCase[]
+
+  @@index([projectId])
+  @@index([userId])
+  @@map("spec_generations")
+}
+
+// Caso de uso derivado automáticamente o registrado por el analista
+model UseCase {
+  id               String   @id @default(uuid())
+  projectId        String   @map("project_id")
+  generationId     String?  @map("generation_id")
+  code             String   // ej. UC-001
+  name             String
+  actor            String
+  moduleKey        String   @map("module_key")
+  moduleName       String   @map("module_name")
+  description      String
+  priority         String   @default("medium") // high, medium, low
+  preconditions    Json     @default("[]")
+  mainFlow         Json     @default("[]") @map("main_flow")
+  alternativeFlows Json     @default("[]") @map("alternative_flows")
+  exceptionFlows   Json     @default("[]") @map("exception_flows")
+  postconditions   Json     @default("[]")
+  source           String   @default("AUTO_SPEC") // AUTO_SPEC, MANUAL
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  project      Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  generation   SpecGeneration? @relation(fields: [generationId], references: [id], onDelete: SetNull)
+  requirements Requirement[]
+
+  @@unique([projectId, code])
+  @@index([projectId])
+  @@index([generationId])
+  @@map("use_cases")
+}
+
+model Requirement {
+  id                 String               @id @default(uuid())
+  projectId          String               @map("project_id")
+  useCaseId          String?              @map("use_case_id")
+  code               String               // ej. REQ-001
+  title              String
+  description        String
+  acceptanceCriteria String               @map("acceptance_criteria")
+  version            Int                  @default(1)
+  status             String               @default("READY") // READY, GENERATED, OBSOLETE
+  nextCaseNumber     Int                  @default(1) @map("next_case_number")
+  derivationHints    Json?                @map("derivation_hints") // variables BVA, categoría ISTQB, tipo (funcional / no funcional)
+  createdAt          DateTime             @default(now()) @map("created_at")
+  updatedAt          DateTime             @updatedAt @map("updated_at")
+
+  project       Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  useCase       UseCase?             @relation(fields: [useCaseId], references: [id], onDelete: SetNull)
+  testCases     TestCase[]
+  aiGenerations AiGeneration[]
+  versions      RequirementVersion[]
+
+  @@unique([projectId, code])
+  @@index([projectId])
+  @@index([useCaseId])
+  @@index([status])
+  @@map("requirements")
+}
+
+model RequirementVersion {
+  id                 String      @id @default(uuid())
+  requirementId      String      @map("requirement_id")
+  version            Int
+  title              String
+  description        String
+  acceptanceCriteria String      @map("acceptance_criteria")
+  authorId           String?     @map("author_id")
+  changeSummary      String?     @map("change_summary")
+  createdAt          DateTime    @default(now()) @map("created_at")
+
+  requirement Requirement @relation(fields: [requirementId], references: [id], onDelete: Cascade)
+  author      User?       @relation(fields: [authorId], references: [id], onDelete: SetNull)
+
+  @@unique([requirementId, version])
+  @@index([requirementId])
+  @@map("requirement_versions")
+}
+
+model AiGeneration {
+  id                 String      @id @default(uuid())
+  requirementId      String      @map("requirement_id")
+  userId             String?     @map("user_id")
+  requirementVersion Int         @default(1) @map("requirement_version")
+  provider           String      // gemini, openai
+  model              String      // gemini-2.5-flash-lite, gpt-5-nano, etc.
+  promptVersion      String      @default("v1.0") @map("prompt_version")
+  inputTokens        Int         @map("input_tokens")
+  outputTokens       Int         @map("output_tokens")
+  estimatedCost      Float?      @map("estimated_cost") // null si desconocido
+  responseTimeMs     Int         @map("response_time_ms")
+  inputHash          String?     @map("input_hash")
+  status             String      @default("SUCCEEDED") // SUCCEEDED, FAILED
+  errorMessage       String?     @map("error_message")
+  rawResponse        Json?       @map("raw_response")
+  createdAt          DateTime    @default(now()) @map("created_at")
+
+  requirement Requirement @relation(fields: [requirementId], references: [id], onDelete: Cascade)
+  user        User?       @relation(fields: [userId], references: [id], onDelete: SetNull)
+  testCases   TestCase[]
+
+  @@index([requirementId])
+  @@index([requirementId, inputHash])
+  @@index([userId])
+  @@map("ai_generations")
+}
+
+model TestCase {
+  id                 String           @id @default(uuid())
+  requirementId      String           @map("requirement_id")
+  generationId       String?          @map("generation_id")
+  code               String           // ej. CP-001
+  type               String           // positive, negative, alternative, boundary, validation
+  title              String
+  preconditions      Json             @default("[]")
+  steps              Json             @default("[]")
+  testData           String?          @map("test_data")
+  expectedResult     String           @map("expected_result")
+  priority           String           @default("medium") // high, medium, low
+  evidenceStatus     String           @default("pending") @map("evidence_status") // derived, suggested, ambiguous, conflict, pending
+  evidenceText       String?          @map("evidence_text")
+  technique          String?          // BDD_SCENARIO, USE_CASE_BASIC_COURSE, BVA_*, TEMPLATE_*, ERROR_GUESSING_*, ...
+  originalContent    Json?            @map("original_content") // Snapshot inmutable de la salida inicial
+  version            Int              @default(1) // Versión de revisión (para bloqueo optimista)
+  requirementVersion Int              @default(1) @map("requirement_version")
+  isObsolete         Boolean          @default(false) @map("is_obsolete")
+  source             String           @default("MANUAL") // AUTO_SPEC, AUTO_DERIVED, MANUAL, TEMPLATE, ISTQB_BVA, FORMAL_DESIGN, CLONE, LEGACY
+  status             String           @default("PENDING") // PENDING, APPROVED, MODIFIED, REJECTED
+  createdAt          DateTime         @default(now()) @map("created_at")
+  updatedAt          DateTime         @updatedAt @map("updated_at")
+
+  requirement Requirement           @relation(fields: [requirementId], references: [id], onDelete: Cascade)
+  generation  AiGeneration?         @relation(fields: [generationId], references: [id], onDelete: SetNull)
+  reviews     TestCaseReview[]
+  executions  TestExecutionResult[]
+
+  @@unique([requirementId, code])
+  @@index([requirementId])
+  @@index([generationId])
+  @@index([status])
+  @@index([isObsolete])
+  @@index([source])
+  @@map("test_cases")
+}
+
+model TestCaseReview {
+  id                         String   @id @default(uuid())
+  testCaseId                 String   @map("test_case_id")
+  reviewerId                 String   @map("reviewer_id")
+  decision                   String   // APPROVED, MODIFIED, REJECTED
+  comments                   String?
+  justification              String?  // Obligatoria para aprobar conflictos
+  reviewedRequirementVersion Int      @default(1) @map("reviewed_requirement_version")
+  previousContent            Json     @map("previous_content") // Snapshot completo antes
+  newContent                 Json     @map("new_content") // Snapshot completo después
+  createdAt                  DateTime @default(now()) @map("created_at")
+
+  testCase TestCase @relation(fields: [testCaseId], references: [id], onDelete: Cascade)
+  reviewer User     @relation(fields: [reviewerId], references: [id], onDelete: Restrict)
+
+  @@index([testCaseId])
+  @@index([reviewerId])
+  @@map("test_case_reviews")
+}
+
+model TestRun {
+  id          String   @id @default(uuid())
+  projectId   String   @map("project_id")
+  name        String
+  environment String   @default("QA Sandbox")
+  status      String   @default("IN_PROGRESS") // IN_PROGRESS, COMPLETED
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  project    Project               @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  executions TestExecutionResult[]
+
+  @@index([projectId])
+  @@index([status])
+  @@map("test_runs")
+}
+
+model TestExecutionResult {
+  id              String    @id @default(uuid())
+  testRunId       String    @map("test_run_id")
+  testCaseId      String    @map("test_case_id")
+  code            String
+  title           String
+  status          String    @default("PENDING") // PASSED, FAILED, BLOCKED, SKIPPED, PENDING
+  durationSeconds Int       @default(0) @map("duration_seconds")
+  executedAt      DateTime? @map("executed_at")
+  executedBy      String?   @map("executed_by")
+  evidenceText    String?   @map("evidence_text")
+  defectNotes     String?   @map("defect_notes")
+  defectLogged    Boolean   @default(false) @map("defect_logged")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  testRun  TestRun  @relation(fields: [testRunId], references: [id], onDelete: Cascade)
+  testCase TestCase @relation(fields: [testCaseId], references: [id], onDelete: Cascade)
+
+  @@index([testRunId])
+  @@index([testCaseId])
+  @@index([status])
+  @@map("test_execution_results")
+}

@@ -1,0 +1,34 @@
+name: SAST ESLint Security
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  security:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci
+      - run: mkdir -p reports && npm run security:scan
+      - name: Resumen de alertas para revisión humana
+        run: |
+          node -e "const fs=require('fs');const r=JSON.parse(fs.readFileSync('reports/eslint-security.json'));const m=r.flatMap(x=>x.messages);fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY,'## ESLint Security\nArchivos analizados: '+r.length+'\n\nAlertas: '+m.length+'\n\nLas alertas requieren revisión; éxito no equivale a ausencia de vulnerabilidades.\n');if(m.some(x=>x.severity===2))process.exit(1)"
+      - name: Auditoría de dependencias
+        run: npm audit --json > reports/npm-audit.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: sast-eslint-security
+          path: backend/reports/

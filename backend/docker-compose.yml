@@ -1,0 +1,49 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: testgenai_postgres
+    restart: always
+    environment:
+      POSTGRES_DB: calidad_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres_password_2026
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d calidad_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build:
+      context: ..
+      dockerfile: backend/Dockerfile
+    container_name: testgenai_app
+    restart: unless-stopped
+    ports:
+      - "4000:4000"
+    environment:
+      NODE_ENV: production
+      PORT: 4000
+      DATABASE_URL: postgresql://postgres:postgres_password_2026@postgres:5432/calidad_db?schema=public
+      JWT_SECRET: super_secure_production_jwt_secret_testgenai_2026_minimum_32_chars
+      JWT_EXPIRES_IN: 1h
+      JWT_REFRESH_EXPIRES_IN: 7d
+      AI_PROVIDER_DEFAULT: gemini
+      AI_GEMINI_MODEL: gemini-1.5-flash
+      AI_OPENAI_MODEL: gpt-4o-mini
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      CORS_ORIGINS: http://localhost:4000,http://127.0.0.1:4000
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  pgdata:
+    driver: local

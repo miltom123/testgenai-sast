@@ -1,0 +1,52 @@
+name: Análisis SonarQube del proyecto
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      SONAR_HOST_URL: http://127.0.0.1:9000
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Levantar SonarQube Community efímero en el runner
+        run: |
+          sudo sysctl -w vm.max_map_count=524288
+          docker run -d --name testgenai-sonarqube-ci -p 127.0.0.1:9000:9000 sonarqube:community
+          for attempt in $(seq 1 120); do
+            status=$(curl --silent "$SONAR_HOST_URL/api/system/status" | jq -r '.status // empty' || true)
+            [ "$status" = UP ] && break
+            sleep 2
+          done
+          test "$status" = UP
+      - name: Crear credencial temporal del servicio efímero
+        run: |
+          password="Ci9!$(openssl rand -hex 24)"
+          echo "::add-mask::$password"
+          curl --fail-with-body --silent --show-error --user admin:admin --request POST "$SONAR_HOST_URL/api/users/change_password" --data-urlencode login=admin --data-urlencode previousPassword=admin --data-urlencode "password=$password"
+          token=$(curl --fail --silent --user "admin:$password" --request POST "$SONAR_HOST_URL/api/user_tokens/generate" --data-urlencode name=ci | jq -r '.token')
+          test -n "$token" && test "$token" != null
+          echo "::add-mask::$token"
+          echo "SONAR_TOKEN=$token" >> "$GITHUB_ENV"
+      - run: npm ci --prefix backend && npm run prisma:generate --prefix backend && npm run test:coverage --prefix backend
+      - uses: SonarSource/sonarqube-scan-action@v6
+      - name: Exportar todos los bugs, vulnerabilidades y hotspots
+        run: node scripts/export-sonar.cjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: sonarqube-reportes
+          path: reports/
+      - name: Diagnóstico del servicio de análisis
+        if: failure()
+        run: docker logs testgenai-sonarqube-ci --tail 80
+      - name: Eliminar exclusivamente el servicio efímero de esta ejecución
+        if: always()
+        run: docker rm --force testgenai-sonarqube-ci

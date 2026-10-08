@@ -1,0 +1,2560 @@
+<!doctype html><html lang="es"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Documentación técnica TestGenAI</title><style>body{max-width:1100px;margin:40px auto;padding:0 24px;font:16px/1.6 system-ui;color:#182235;background:#f8fafc}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:white;border:1px solid #ccd4df;padding:24px}a{color:#1855a3}nav a{margin-right:20px}</style><h1>Documentación técnica TestGenAI</h1><p>Fuente: revisión c8392027f8e3942908b60817ee7dbef44e0475c2. 98 archivos TypeScript, 62 clases y 12 modelos Prisma.</p><nav><a href="#datos">Diccionario</a><a href="#tecnica">Clases y métodos</a><a href="ENTIDAD_RELACION.mmd">ER</a><a href="CLASES.mmd">Clases</a><a href="COMPONENTES.mmd">Componentes</a><a href="DESPLIEGUE.mmd">Despliegue</a></nav><h2 id="datos">Diccionario de datos</h2><pre># Diccionario de datos
+
+Generado desde `backend/prisma/schema.prisma`. Los campos de relación de Prisma se distinguen de las columnas persistidas.
+
+## User
+
+| Campo | Tipo Prisma | Restricciones |
+|---|---|---|
+| id | String | @id @default(uuid()) |
+| email | String | @unique |
+| passwordHash | String | @map(&quot;password_hash&quot;) |
+| fullName | String | @map(&quot;full_name&quot;) |
+| role | String | @default(&quot;QA_TESTER&quot;) // QA_TESTER, QA_LEAD, DEVELOPER, ADMIN |
+| isActive | Boolean | @default(true) @map(&quot;is_active&quot;) |
+| preferences | Json? | @default(&quot;{}&quot;) |
+| createdAt | DateTime | @default(now()) @map(&quot;created_at&quot;) |
+| updatedAt | DateTime | @updatedAt @map(&quot;updated_at&quot;) |
+| projects | Project[] |  |
+| reviews | TestCaseReview[] |  |
+| sessions | AuthSession[] |  |
+| requirementVersions | RequirementVersion[] |  |
+| specGenerations | SpecGeneration[] |  |
+| aiGenerations | AiGeneration[] |  |
+
+## AuthSession
+
+| Campo | Tipo Prisma | Restricciones |
+|---|---|---|
+| id | String | @id @default(uuid()) |
+| userId | String | @map(&quot;user_id&quot;) |
+| tokenHash | String | @unique @map(&quot;token_hash&quot;) |
+| userAgent | String? | @map(&quot;user_agent&quot;) |
+| ipAddress | String? | @map(&quot;ip_address&quot;) |
+| isRevoked | Boolean | @default(false) @map(&quot;is_revoked&quot;) |
+| expiresAt | DateTime | @map(&quot;expires_at&quot;) |
+| createdAt | DateTime | @default(now()) @map(&quot;created_at&quot;) |
+| updatedAt | DateTime | @updatedAt @map(&quot;updated_at&quot;) |
+| user | User | @relation(fields: [userId], references: [id], onDelete: Cascade) |
+
+## Project
+
+| Campo | Tipo Prisma | Restricciones |
+|---|---|---|
+| id | String | @id @default(uuid()) |
+| name | String |  |
+| description | String? |  |
+| ownerId | String | @map(&quot;owner_id&quot;) |
+| status | String | @default(&quot;ACTIVE&quot;) // ACTIVE, ARCHIVED |
+| budgetUsd | Float? | @default(10.0) @map(&quot;budget_usd&quot;) |
+| nextRequirementNumber | Int | @default(1) @map(&quot;next_requirement_number&quot;) |
+| nextUseCaseNumber | Int | @default(1) @map(&quot;next_use_case_number&quot;) |
+| createdAt | DateTime | @default(now()) @map(&quot;created_at&quot;) |
+| updatedAt | DateTime | @updatedAt @map(&quot;updated_at&quot;) |
+| owner | User | @relation(fields: [ownerId], references: [id], onDelete: Restrict) |
+| requirements | Requirement[] |  |
+| useCases | UseCase[] |  |
+| specGenerations | SpecGeneration[] |  |
+| testRuns | TestRun[] |  |
+
+## SpecGeneration
+
+| Campo | Tipo Prisma | Restricciones |
+|---|---|---|
+| id | String | @id @default(uuid()) |
+| projectId | String | @map(&quot;project_id&quot;) |
+| userId | String? | @map(&quot;user_id&quot;) |
+| engineVersion | String | @map(&quot;engine_version&quot;) |
+| depth | String | @default(&quot;standard&quot;) // basic, standard, exhaustive |
+| inputName | String | @map(&quot;input_name&quot;) |
+| inputDescription | String | @map(&quot;input_description&quot;) |
+| inputHash | String | @map(&quot;input_hash&quot;) |
+| actorsDetected | Json | @default(&quot;[]&quot;) @map(&quot;actors_detected&quot;) |
+| modulesDetected | Json | @default(&quot;[]&quot;) @map(&quot;modules_detected&quot;) |
+| entitiesDetected | Json | @default(&quot;[]&quot;) @map(&quot;entities_detected&quot;) |
+| warnings | Json | @default(&quot;[]&quot;) |
+| useCasesCreated | Int | @default(0) @map(&quot;use_cases_created&quot;) |
+| requirementsCreated | Int | @default(0) @map(&quot;requirements_created&quot;) |
+| testCasesCreated | Int | @default(0) @map(&quot;test_cases_created&quot;) |
+| useCasesSkipped | Int | @default(0) @map(&quot;use_cases_skipped&quot;) |
+| requirementsSkipped | Int | @default(0) @map(&quot;requirements_skipped&quot;) |
+| durationMs | Int | @default(0) @map(&quot;duration_ms&quot;) |
+| status | String | @default(&quot;SUCCEEDED&quot;) // SUCCEEDED, FAILED |
+| errorMessage | String? | @map(&quot;error_message&quot;) |
+| createdAt | DateTime | @default(now()) @map(&quot;created_at&quot;) |
+| project | Project | @relation(fields: [projectId], references: [id], onDelete: Cascade) |
+| user | User? | @relation(fields: [userId], references: [id], onDelete: SetNull) |
+| useCases | UseCase[] |  |
+
+## UseCase
+
+| Campo | Tipo Prisma | Restricciones |
+|---|---|---|
+| id | String | @id @default(uuid()) |
+| projectId | String | @map(&quot;project_id&quot;) |
+| generationId | String? | @map(&quot;generation_id&quot;) |
+| code | String | // ej. UC-001 |
+| name | String |  |
+| actor | String |  |
+| moduleKey | String | @map(&quot;module_key&quot;) |
+| moduleName | String | @map(&quot;module_name&quot;) |
+| description | String |  |
+| priority | String | @default(&quot;medium&quot;) // high, medium, low |
+| preconditions | Json | @default(&quot;[]&quot;) |
+| mainFlow | Json | @default(&quot;[]&quot;) @map(&quot;main_flow&quot;) |
+| alternativeFlows | Json | @default(&quot;[]&quot;) @map(&quot;alternative_flows&quot;) |
+| exceptionFlows | Json | @default(&quot;[]&quot;) @map(&quot;exception_flows&quot;) |
+| postconditions | Json | @default(&quot;[]&quot;) |
+| source | String | @default(&quot;AUTO_SPEC&quot;) // AUTO_SPEC, MANUAL |
+| createdAt | DateTime | @default(now()) @map(&quot;created_at&quot;) |
+| updatedAt | DateTime | @updatedAt @map(&quot;updated_at&quot;) |
+| project | Project | @relation(fields: [projectId], references: [id], onDelete: Cascade) |
+| generation | SpecGeneration? | @relation(fields: [generationId], references: [id], onDelete: SetNull) |
+| requirements | Requirement[] |  |
+
+## Requirement
+
+| Campo | Tipo Prisma | Restricciones |
+|---|---|---|
+| id | String | @id @default(uuid()) |
+| projectId | String | @map(&quot;project_id&quot;) |
+| useCaseId | String? | @map(&quot;use_case_id&quot;) |
+| code | String | // ej. REQ-001 |
+| title | String |  |
+| description | String |  |
+| acceptanceCriteria | String | @map(&quot;acceptance_criteria&quot;) |
+| version | Int | @default(1) |
+| status | String | @default(&quot;READY&quot;) // READY, GENERATED, OBSOLETE |
+| nextCaseNumber | Int | @default(1) @map(&quot;next_case_number&quot;) |
+| derivationHints | Json? | @map(&quot;derivation_hints&quot;) // variables BVA, categoría ISTQB, tipo (funcional / no funcional) |
+| createdAt | DateTime | @default(now()) @map(&quot;created_at&quot;) |
+| updatedAt | DateTime | @updatedAt @map(&quot;updated_at&quot;) |
+| project | Project | @relation(fields: [projectId], references: [id], onDelete: Cascade) |
+| useCase | UseCase? | @relation(fields: [useCaseId], references: [id], onDelete: SetNull) |
+| testCases | TestCase[] |  |
+| aiGenerations | AiGeneration[] |  |
+| versions | RequirementVersion[] |  |
+
+## RequirementVersion
+
+| Campo | Tipo Prisma | Restricciones |
+|---|---|---|
+| id | String | @id @default(uuid()) |
+| requirementId | String | @map(&quot;requirement_id&quot;) |
+| version | Int |  |
+| title | String |  |
+| description | String |  |
+| acceptanceCriteria | String | @map(&quot;acceptance_criteria&quot;) |
+| authorId | String? | @map(&quot;author_id&quot;) |
+| changeSummary | String? | @map(&quot;change_summary&quot;) |
+| createdAt | DateTime | @default(now()) @map(&quot;created_at&quot;) |
+| requirement | Requirement | @relation(fields: [requirementId], references: [id], onDelete: Cascade) |
+| author | User? | @relation(fields: [authorId], references: [id], onDelete: SetNull) |
+
+## AiGeneration
+
+| Campo | Tipo Prisma | Restricciones |
+|---|---|---|
+| id | String | @id @default(uuid()) |
+| requirementId | String | @map(&quot;requirement_id&quot;) |
+| userId | String? | @map(&quot;user_id&quot;) |
+| requirementVersion | Int | @default(1) @map(&quot;requirement_version&quot;) |
+| provider | String | // gemini, openai |
+| model | String | // gemini-2.5-flash-lite, gpt-5-nano, etc. |
+| promptVersion | String | @default(&quot;v1.0&quot;) @map(&quot;prompt_version&quot;) |
+| inputTokens | Int | @map(&quot;input_tokens&quot;) |
+| outputTokens | Int | @map(&quot;output_tokens&quot;) |
+| estimatedCost | Float? | @map(&quot;estimated_cost&quot;) // null si desconocido |
+| responseTimeMs | Int | @map(&quot;response_time_ms&quot;) |
+| inputHash | String? | @map(&quot;input_hash&quot;) |
+| status | String | @default(&quot;SUCCEEDED&quot;) // SUCCEEDED, FAILED |
+| errorMessage | String? | @map(&quot;error_message&quot;) |
+| rawResponse | Json? | @map(&quot;raw_response&quot;) |
+| createdAt | DateTime | @default(now()) @map(&quot;created_at&quot;) |
+| requirement | Requirement | @relation(fields: [requirementId], references: [id], onDelete: Cascade) |
+| user | User? | @relation(fields: [userId], references: [id], onDelete: SetNull) |
+| testCases | TestCase[] |  |
+
+## TestCase
+
+| Campo | Tipo Prisma | Restricciones |
+|---|---|---|
+| id | String | @id @default(uuid()) |
+| requirementId | String | @map(&quot;requirement_id&quot;) |
+| generationId | String? | @map(&quot;generation_id&quot;) |
+| code | String | // ej. CP-001 |
+| type | String | // positive, negative, alternative, boundary, validation |
+| title | String |  |
+| preconditions | Json | @default(&quot;[]&quot;) |
+| steps | Json | @default(&quot;[]&quot;) |
+| testData | String? | @map(&quot;test_data&quot;) |
+| expectedResult | String | @map(&quot;expected_result&quot;) |
+| priority | String | @default(&quot;medium&quot;) // high, medium, low |
+| evidenceStatus | String | @default(&quot;pending&quot;) @map(&quot;evidence_status&quot;) // derived, suggested, ambiguous, conflict, pending |
+| evidenceText | String? | @map(&quot;evidence_text&quot;) |
+| technique | String? | // BDD_SCENARIO, USE_CASE_BASIC_COURSE, BVA_*, TEMPLATE_*, ERROR_GUESSING_*, ... |
+| originalContent | Json? | @map(&quot;original_content&quot;) // Snapshot inmutable de la salida inicial |
+| version | Int | @default(1) // Versión de revisión (para bloqueo optimista) |
+| requirementVersion | Int | @default(1) @map(&quot;requirement_version&quot;) |
+| isObsolete | Boolean | @default(false) @map(&quot;is_obsolete&quot;) |
+| source | String | @default(&quot;MANUAL&quot;) // AUTO_SPEC, AUTO_DERIVED, MANUAL, TEMPLATE, ISTQB_BVA, FORMAL_DESIGN, CLONE, LEGACY |
+| status | String | @default(&quot;PENDING&quot;) // PENDING, APPROVED, MODIFIED, REJECTED |
+| createdAt | DateTime | @default(now()) @map(&quot;created_at&quot;) |
+| updatedAt | DateTime | @updatedAt @map(&quot;updated_at&quot;) |
+| requirement | Requirement | @relation(fields: [requirementId], references: [id], onDelete: Cascade) |
+| generation | AiGeneration? | @relation(fields: [generationId], references: [id], onDelete: SetNull) |
+| reviews | TestCaseReview[] |  |
+| executions | TestExecutionResult[] |  |
+
+## TestCaseReview
+
+| Campo | Tipo Prisma | Restricciones |
+|---|---|---|
+| id | String | @id @default(uuid()) |
+| testCaseId | String | @map(&quot;test_case_id&quot;) |
+| reviewerId | String | @map(&quot;reviewer_id&quot;) |
+| decision | String | // APPROVED, MODIFIED, REJECTED |
+| comments | String? |  |
+| justification | String? | // Obligatoria para aprobar conflictos |
+| reviewedRequirementVersion | Int | @default(1) @map(&quot;reviewed_requirement_version&quot;) |
+| previousContent | Json | @map(&quot;previous_content&quot;) // Snapshot completo antes |
+| newContent | Json | @map(&quot;new_content&quot;) // Snapshot completo después |
+| createdAt | DateTime | @default(now()) @map(&quot;created_at&quot;) |
+| testCase | TestCase | @relation(fields: [testCaseId], references: [id], onDelete: Cascade) |
+| reviewer | User | @relation(fields: [reviewerId], references: [id], onDelete: Restrict) |
+
+## TestRun
+
+| Campo | Tipo Prisma | Restricciones |
+|---|---|---|
+| id | String | @id @default(uuid()) |
+| projectId | String | @map(&quot;project_id&quot;) |
+| name | String |  |
+| environment | String | @default(&quot;QA Sandbox&quot;) |
+| status | String | @default(&quot;IN_PROGRESS&quot;) // IN_PROGRESS, COMPLETED |
+| createdAt | DateTime | @default(now()) @map(&quot;created_at&quot;) |
+| updatedAt | DateTime | @updatedAt @map(&quot;updated_at&quot;) |
+| project | Project | @relation(fields: [projectId], references: [id], onDelete: Cascade) |
+| executions | TestExecutionResult[] |  |
+
+## TestExecutionResult
+
+| Campo | Tipo Prisma | Restricciones |
+|---|---|---|
+| id | String | @id @default(uuid()) |
+| testRunId | String | @map(&quot;test_run_id&quot;) |
+| testCaseId | String | @map(&quot;test_case_id&quot;) |
+| code | String |  |
+| title | String |  |
+| status | String | @default(&quot;PENDING&quot;) // PASSED, FAILED, BLOCKED, SKIPPED, PENDING |
+| durationSeconds | Int | @default(0) @map(&quot;duration_seconds&quot;) |
+| executedAt | DateTime? | @map(&quot;executed_at&quot;) |
+| executedBy | String? | @map(&quot;executed_by&quot;) |
+| evidenceText | String? | @map(&quot;evidence_text&quot;) |
+| defectNotes | String? | @map(&quot;defect_notes&quot;) |
+| defectLogged | Boolean | @default(false) @map(&quot;defect_logged&quot;) |
+| createdAt | DateTime | @default(now()) @map(&quot;created_at&quot;) |
+| updatedAt | DateTime | @updatedAt @map(&quot;updated_at&quot;) |
+| testRun | TestRun | @relation(fields: [testRunId], references: [id], onDelete: Cascade) |
+| testCase | TestCase | @relation(fields: [testCaseId], references: [id], onDelete: Cascade) |
+</pre><h2 id="tecnica">Código técnico</h2><pre># Documentación técnica del código
+
+Generada desde el árbol de sintaxis TypeScript. Incluye clases, interfaces, funciones, métodos y propiedades declaradas.
+
+## backend/src/application/use-cases/clone-test-case.use-case.ts
+
+### CloneTestCaseInputDTO
+
+| Miembro | Declaración |
+|---|---|
+| testCaseId | `testCaseId: string` |
+| userId | `userId: string` |
+| userRole | `userRole: string` |
+| replaceFind | `replaceFind: string` |
+| replaceWith | `replaceWith: string` |
+### CloneTestCaseUseCase
+
+| Miembro | Declaración |
+|---|---|
+| execute | `execute(input: CloneTestCaseInputDTO): retorno inferido` |
+
+## backend/src/application/use-cases/create-manual-test-case.use-case.ts
+
+### CreateManualTestCaseInputDTO
+
+| Miembro | Declaración |
+|---|---|
+| requirementId | `requirementId: string` |
+| userId | `userId: string` |
+| userRole | `userRole: string` |
+| type | `type: &#39;positive&#39; \| &#39;negative&#39; \| &#39;alternative&#39; \| &#39;boundary&#39; \| &#39;validation&#39;` |
+| title | `title: string` |
+| preconditions | `preconditions: string[]` |
+| steps | `steps: string[]` |
+| testData | `testData: string \| null` |
+| expectedResult | `expectedResult: string` |
+| priority | `priority: &#39;high&#39; \| &#39;medium&#39; \| &#39;low&#39;` |
+### CreateManualTestCaseUseCase
+
+| Miembro | Declaración |
+|---|---|
+| execute | `execute(input: CreateManualTestCaseInputDTO): retorno inferido` |
+
+## backend/src/application/use-cases/create-test-case-from-bug.use-case.ts
+
+### CreateFromBugInputDTO
+
+| Miembro | Declaración |
+|---|---|
+| requirementId | `requirementId: string` |
+| userId | `userId: string` |
+| userRole | `userRole: string` |
+| defectTitle | `defectTitle: string` |
+| stepsToReproduce | `stepsToReproduce: string[]` |
+| actualBehavior | `actualBehavior: string` |
+| expectedBehavior | `expectedBehavior: string` |
+| severity | `severity: &#39;high&#39; \| &#39;medium&#39; \| &#39;low&#39;` |
+### CreateTestCaseFromBugUseCase
+
+| Miembro | Declaración |
+|---|---|
+| execute | `execute(input: CreateFromBugInputDTO): retorno inferido` |
+
+## backend/src/application/use-cases/derive-test-cases.use-case.ts
+
+### DeriveTestCasesInputDTO
+
+| Miembro | Declaración |
+|---|---|
+| requirementId | `requirementId: string` |
+| userId | `userId: string` |
+| userRole | `userRole: string` |
+| depth | `depth: DerivationDepth` |
+### DeriveTestCasesOutputDTO
+
+| Miembro | Declaración |
+|---|---|
+| requirementId | `requirementId: string` |
+| requirementCode | `requirementCode: string` |
+| depth | `depth: DerivationDepth` |
+| derived | `derived: number` |
+| inserted | `inserted: number` |
+| omittedAsExisting | `omittedAsExisting: number` |
+| techniques | `techniques: Record&lt;string, number&gt;` |
+| cases | `cases: Array&lt;Record&lt;string, unknown&gt;&gt;` |
+| duplicateWarnings | `duplicateWarnings: DuplicateCandidate[]` |
+### DerivationHints
+
+| Miembro | Declaración |
+|---|---|
+| variables | `variables: BvaVariableInput[]` |
+| templateCategory | `templateCategory: string \| null` |
+| priority | `priority: &#39;high&#39; \| &#39;medium&#39; \| &#39;low&#39;` |
+### DeriveTestCasesUseCase
+
+| Miembro | Declaración |
+|---|---|
+| execute | `execute(input: DeriveTestCasesInputDTO): Promise&lt;DeriveTestCasesOutputDTO&gt;` |
+
+## backend/src/application/use-cases/generate-from-bva.use-case.ts
+
+### GenerateFromBvaInputDTO
+
+| Miembro | Declaración |
+|---|---|
+| requirementId | `requirementId: string` |
+| variable | `variable: BvaVariableInput` |
+| userId | `userId: string` |
+| userRole | `userRole: string` |
+### GenerateFromBvaUseCase
+
+| Miembro | Declaración |
+|---|---|
+| execute | `execute(input: GenerateFromBvaInputDTO): retorno inferido` |
+
+## backend/src/application/use-cases/generate-from-formal.use-case.ts
+
+### GenerateFromFormalInputDTO
+
+| Miembro | Declaración |
+|---|---|
+| requirementId | `requirementId: string` |
+| method | `method: FormalMethodType` |
+| userId | `userId: string` |
+| userRole | `userRole: string` |
+| payload | `payload: {
+    conditions?: DecisionCondition[];
+    actions?: DecisionAction[];
+    states?: string[];
+    validTransitions?: StateTransition[];
+    parameters?: ParameterOption[];
+    classes?: ClassificationClass[];
+    useCase?: UseCaseInput;
+    entityName?: string;
+  }` |
+### GenerateFromFormalUseCase
+
+| Miembro | Declaración |
+|---|---|
+| execute | `execute(input: GenerateFromFormalInputDTO): retorno inferido` |
+
+## backend/src/application/use-cases/generate-from-template.use-case.ts
+
+### GenerateFromTemplateInputDTO
+
+| Miembro | Declaración |
+|---|---|
+| requirementId | `requirementId: string` |
+| userId | `userId: string` |
+| userRole | `userRole: string` |
+| templateCategory | `templateCategory: string` |
+### GenerateFromTemplateOutputDTO
+
+| Miembro | Declaración |
+|---|---|
+| cases | `cases: Array&lt;Record&lt;string, unknown&gt;&gt;` |
+| templateUsed | `templateUsed: {
+    category: string;
+    name: string;
+    casesGenerated: number;
+  }` |
+| duplicateWarnings | `duplicateWarnings: DuplicateCandidate[]` |
+### GenerateFromTemplateUseCase
+
+| Miembro | Declaración |
+|---|---|
+| execute | `execute(input: GenerateFromTemplateInputDTO): Promise&lt;GenerateFromTemplateOutputDTO&gt;` |
+
+## backend/src/application/use-cases/generate-project-spec.use-case.ts
+
+### GenerateProjectSpecInputDTO
+
+| Miembro | Declaración |
+|---|---|
+| projectId | `projectId: string` |
+| userId | `userId: string` |
+| userRole | `userRole: string` |
+| name | `name: string` |
+| description | `description: string` |
+| depth | `depth: DerivationDepth` |
+| includeNonFunctional | `includeNonFunctional: boolean` |
+| includeEntityCrud | `includeEntityCrud: boolean` |
+### GeneratedUseCaseSummary
+
+| Miembro | Declaración |
+|---|---|
+| id | `id: string` |
+| code | `code: string` |
+| name | `name: string` |
+| actor | `actor: string` |
+| moduleKey | `moduleKey: string` |
+| moduleName | `moduleName: string` |
+| requirementCount | `requirementCount: number` |
+### GeneratedRequirementSummary
+
+| Miembro | Declaración |
+|---|---|
+| id | `id: string` |
+| code | `code: string` |
+| title | `title: string` |
+| kind | `kind: &#39;functional&#39; \| &#39;non_functional&#39;` |
+| useCaseCode | `useCaseCode: string \| null` |
+| testCasesCreated | `testCasesCreated: number` |
+### GenerateProjectSpecOutputDTO
+
+| Miembro | Declaración |
+|---|---|
+| generationId | `generationId: string` |
+| engineVersion | `engineVersion: string` |
+| depth | `depth: DerivationDepth` |
+| summary | `summary: ProjectSpecification[&#39;summary&#39;]` |
+| actors | `actors: ProjectSpecification[&#39;actors&#39;]` |
+| modules | `modules: ProjectSpecification[&#39;modules&#39;]` |
+| entities | `entities: ProjectSpecification[&#39;entities&#39;]` |
+| warnings | `warnings: string[]` |
+| created | `created: { useCases: number; requirements: number; testCases: number }` |
+| skipped | `skipped: { useCases: number; requirements: number }` |
+| useCases | `useCases: GeneratedUseCaseSummary[]` |
+| requirements | `requirements: GeneratedRequirementSummary[]` |
+| durationMs | `durationMs: number` |
+### GenerateProjectSpecUseCase
+
+| Miembro | Declaración |
+|---|---|
+| execute | `execute(input: GenerateProjectSpecInputDTO): Promise&lt;GenerateProjectSpecOutputDTO&gt;` |
+
+## backend/src/application/use-cases/generate-test-cases.use-case.ts
+
+### GenerateTestCasesInputDTO
+
+| Miembro | Declaración |
+|---|---|
+| requirementId | `requirementId: string` |
+| userId | `userId: string` |
+| userRole | `userRole: string` |
+| provider | `provider: &#39;gemini&#39; \| &#39;openai&#39;` |
+| model | `model: string` |
+| temperature | `temperature: number` |
+| useCache | `useCache: boolean` |
+### GenerateTestCasesOutputDTO
+
+| Miembro | Declaración |
+|---|---|
+| cases | `cases: Array&lt;Record&lt;string, unknown&gt;&gt;` |
+| generation | `generation: {
+    id: string;
+    provider: string;
+    model: string;
+    inputTokens: number;
+    outputTokens: number;
+    estimatedCost: number \| null;
+    responseTimeMs: number;
+    cached: boolean;
+  }` |
+| duplicateWarnings | `duplicateWarnings: DuplicateCandidate[]` |
+### GenerateTestCasesUseCase
+
+| Miembro | Declaración |
+|---|---|
+| execute | `execute(input: GenerateTestCasesInputDTO): Promise&lt;GenerateTestCasesOutputDTO&gt;` |
+
+## backend/src/application/use-cases/get-projects-with-metrics.use-case.ts
+
+### GetProjectsInputDTO
+
+| Miembro | Declaración |
+|---|---|
+| userId | `userId: string` |
+| userRole | `userRole: string` |
+| skip | `skip: number` |
+| take | `take: number` |
+### ProjectStatsDTO
+
+| Miembro | Declaración |
+|---|---|
+| requirementsCount | `requirementsCount: number` |
+| totalTestCases | `totalTestCases: number` |
+| approvedTestCases | `approvedTestCases: number` |
+| coveragePercent | `coveragePercent: number` |
+| totalCostUsd | `totalCostUsd: number \| null` |
+### ProjectDTO
+
+| Miembro | Declaración |
+|---|---|
+| id | `id: string` |
+| name | `name: string` |
+| description | `description: string \| null` |
+| status | `status: string` |
+| budgetUsd | `budgetUsd: number \| null` |
+| createdAt | `createdAt: Date` |
+| updatedAt | `updatedAt: Date` |
+| stats | `stats: ProjectStatsDTO` |
+### GetProjectsOutputDTO
+
+| Miembro | Declaración |
+|---|---|
+| items | `items: ProjectDTO[]` |
+| total | `total: number` |
+### GetProjectsWithMetricsUseCase
+
+| Miembro | Declaración |
+|---|---|
+| execute | `execute(input: GetProjectsInputDTO): Promise&lt;GetProjectsOutputDTO&gt;` |
+
+## backend/src/application/use-cases/import-test-cases.use-case.ts
+
+### RawImportCaseDTO
+
+| Miembro | Declaración |
+|---|---|
+| title | `title: string` |
+| type | `type: &#39;positive&#39; \| &#39;negative&#39; \| &#39;alternative&#39; \| &#39;boundary&#39; \| &#39;validation&#39;` |
+| preconditions | `preconditions: string[]` |
+| steps | `steps: string[]` |
+| testData | `testData: string \| null` |
+| expectedResult | `expectedResult: string` |
+| priority | `priority: &#39;high&#39; \| &#39;medium&#39; \| &#39;low&#39;` |
+### ImportTestCasesInputDTO
+
+| Miembro | Declaración |
+|---|---|
+| requirementId | `requirementId: string` |
+| userId | `userId: string` |
+| userRole | `userRole: string` |
+| cases | `cases: RawImportCaseDTO[]` |
+### ImportTestCasesUseCase
+
+| Miembro | Declaración |
+|---|---|
+| execute | `execute(input: ImportTestCasesInputDTO): retorno inferido` |
+
+## backend/src/application/use-cases/review-test-case.use-case.ts
+
+### ReviewTestCaseInputDTO
+
+| Miembro | Declaración |
+|---|---|
+| testCaseId | `testCaseId: string` |
+| reviewerId | `reviewerId: string` |
+| reviewerRole | `reviewerRole: string` |
+| decision | `decision: &#39;APPROVED&#39; \| &#39;MODIFIED&#39; \| &#39;REJECTED&#39;` |
+| comments | `comments: string` |
+| justification | `justification: string` |
+| expectedVersion | `expectedVersion: number` |
+| updates | `updates: {
+    title?: string;
+    preconditions?: string[];
+    steps?: string[];
+    testData?: string \| null;
+    expectedResult?: string;
+    priority?: &#39;high&#39; \| &#39;medium&#39; \| &#39;low&#39;;
+    evidenceStatus?: &#39;derived&#39; \| &#39;suggested&#39; \| &#39;ambiguous&#39; \| &#39;conflict&#39; \| &#39;pending&#39;;
+    evidenceText?: string \| null;
+  }` |
+### ReviewTestCaseUseCase
+
+| Miembro | Declaración |
+|---|---|
+| execute | `execute(input: ReviewTestCaseInputDTO): retorno inferido` |
+
+## backend/src/common/cache/lru-cache.ts
+
+### CacheEntry
+
+| Miembro | Declaración |
+|---|---|
+| value | `value: T` |
+| expiresAt | `expiresAt: number` |
+### LruCache
+
+| Miembro | Declaración |
+|---|---|
+| capacity | `capacity: number` |
+| defaultTtlMs | `defaultTtlMs: number` |
+| cache | `cache: Map&lt;string, CacheEntry&lt;T&gt;&gt;` |
+| constructor | `constructor(capacity = 500, defaultTtlSeconds = 300): retorno inferido` |
+| get | `get(key: string): T \| null` |
+| set | `set(key: string, value: T, ttlSeconds?: number): void` |
+| invalidate | `invalidate(key: string): void` |
+| clear | `clear(): void` |
+| size | `size(): number` |
+
+## backend/src/common/errors/api-error.ts
+
+### ApiError
+
+| Miembro | Declaración |
+|---|---|
+| statusCode | `statusCode: number` |
+| isOperational | `isOperational: boolean` |
+| constructor | `constructor(statusCode: number, message: string, isOperational = true): retorno inferido` |
+| badRequest | `badRequest(msg = &#39;Solicitud inválida&#39;): retorno inferido` |
+| unauthorized | `unauthorized(msg = &#39;No autenticado&#39;): retorno inferido` |
+| forbidden | `forbidden(msg = &#39;Acceso denegado&#39;): retorno inferido` |
+| notFound | `notFound(msg = &#39;Recurso no encontrado&#39;): retorno inferido` |
+| conflict | `conflict(msg = &#39;Conflicto con el estado actual del recurso&#39;): retorno inferido` |
+| unprocessableEntity | `unprocessableEntity(msg = &#39;Entidad no procesable&#39;): retorno inferido` |
+| badGateway | `badGateway(msg = &#39;Error al comunicarse con el servicio upstream&#39;): retorno inferido` |
+| serviceUnavailable | `serviceUnavailable(msg = &#39;Servicio no disponible&#39;): retorno inferido` |
+| gatewayTimeout | `gatewayTimeout(msg = &#39;Tiempo de espera agotado con el proveedor upstream&#39;): retorno inferido` |
+
+## backend/src/common/middleware/async-handler.ts
+
+### asyncHandler
+
+`export function asyncHandler(fn: RequestHandler): RequestHandler`
+
+
+## backend/src/common/middleware/auth.middleware.ts
+
+### UserTokenPayload
+
+| Miembro | Declaración |
+|---|---|
+| userId | `userId: string` |
+| email | `email: string` |
+| role | `role: string` |
+### Request
+
+| Miembro | Declaración |
+|---|---|
+| user | `user: UserTokenPayload` |
+### signAccessToken
+
+`export function signAccessToken(payload: UserTokenPayload): string`
+
+### signRefreshToken
+
+`export function signRefreshToken(payload: UserTokenPayload): string`
+
+### verifyRefreshToken
+
+`export function verifyRefreshToken(token: string): UserTokenPayload`
+
+### issueTokenPair
+
+`export function issueTokenPair(payload: UserTokenPayload)`
+
+### signToken
+
+`export function signToken(payload: UserTokenPayload): string`
+
+### authenticateJWT
+
+`export function authenticateJWT(req: Request, res: Response, next: NextFunction)`
+
+### requireRoles
+
+`export function requireRoles(allowedRoles: string[])`
+
+
+## backend/src/common/middleware/error-handler.ts
+
+### notFoundHandler
+
+`export function notFoundHandler(req: Request, res: Response)`
+
+### errorHandler
+
+`export function errorHandler( err: unknown, req: Request, res: Response, // eslint-disable-next-line @typescript-eslint/no-unused-vars _next: NextFunction )`
+
+
+## backend/src/common/middleware/request-id.ts
+
+### Request
+
+| Miembro | Declaración |
+|---|---|
+| id | `id: string` |
+### requestId
+
+`export function requestId(req: Request, res: Response, next: NextFunction)`
+
+
+## backend/src/common/security/cookie-session.ts
+
+### CookieSessionManager
+
+| Miembro | Declaración |
+|---|---|
+| setAuthCookie | `setAuthCookie(res: Response, token: string): void` |
+| setRefreshCookie | `setRefreshCookie(res: Response, refreshToken: string): void` |
+| clearAuthCookies | `clearAuthCookies(res: Response): void` |
+| extractToken | `extractToken(req: Request): string \| null` |
+| extractRefreshToken | `extractRefreshToken(req: Request): string \| null` |
+| verifyMutationOrigin | `verifyMutationOrigin(req: Request, _res: Response, next: NextFunction): void` |
+
+## backend/src/common/security/crypto-vault.ts
+
+### CryptoVault
+
+| Miembro | Declaración |
+|---|---|
+| getKey | `getKey(): Buffer` |
+| encrypt | `encrypt(plainText: string): string` |
+| decrypt | `decrypt(cipherTextBase64: string): string` |
+
+## backend/src/common/security/pii-masker.ts
+
+### MaskingResult
+
+| Miembro | Declaración |
+|---|---|
+| maskedText | `maskedText: string` |
+| piiFound | `piiFound: boolean` |
+| totalMasked | `totalMasked: number` |
+| maskMap | `maskMap: Map&lt;string, string&gt;` |
+### MultiMaskingResult
+
+| Miembro | Declaración |
+|---|---|
+| maskedFields | `maskedFields: T` |
+| piiFound | `piiFound: boolean` |
+| totalMasked | `totalMasked: number` |
+| maskMap | `maskMap: Map&lt;string, string&gt;` |
+### PIIMasker
+
+| Miembro | Declaración |
+|---|---|
+| EMAIL_REGEX | `EMAIL_REGEX: tipo inferido` |
+| CREDIT_CARD_REGEX | `CREDIT_CARD_REGEX: tipo inferido` |
+| PHONE_REGEX | `PHONE_REGEX: tipo inferido` |
+| API_KEY_REGEX | `API_KEY_REGEX: tipo inferido` |
+| DNI_REGEX | `DNI_REGEX: tipo inferido` |
+| IP_REGEX | `IP_REGEX: tipo inferido` |
+| mask | `mask(text: string): MaskingResult` |
+| maskMultiple | `maskMultiple(fields: T): MultiMaskingResult&lt;T&gt;` |
+| maskWithMap | `maskWithMap(text: string, maskMap: Map&lt;string, string&gt;, state: { counter: number }): { masked: string; maskMap: Map&lt;string, string&gt; }` |
+| unmask | `unmask(maskedText: string, maskMap: Map&lt;string, string&gt;): string` |
+
+## backend/src/common/security/prompt-guard.ts
+
+### PromptGuardResult
+
+| Miembro | Declaración |
+|---|---|
+| isSafe | `isSafe: boolean` |
+| riskScore | `riskScore: number` |
+| threatsDetected | `threatsDetected: string[]` |
+| sanitizedText | `sanitizedText: string` |
+### PromptGuard
+
+| Miembro | Declaración |
+|---|---|
+| INJECTION_PATTERNS | `INJECTION_PATTERNS: tipo inferido` |
+| inspect | `inspect(input: string): PromptGuardResult` |
+| assertSafe | `assertSafe(input: string, threshold: number = 40): string` |
+
+## backend/src/common/security/rbac.ts
+
+### RBACManager
+
+| Miembro | Declaración |
+|---|---|
+| ROLE_PERMISSIONS | `ROLE_PERMISSIONS: Record&lt;UserRole, Set&lt;Permission&gt;&gt;` |
+| can | `can(role: string, permission: Permission): boolean` |
+| requirePermission | `requirePermission(permission: Permission): retorno inferido` |
+
+## backend/src/common/security/secure-random.ts
+
+### secureRandomFraction
+
+`export function secureRandomFraction(): number`
+
+
+## backend/src/common/security/session.service.ts
+
+### SessionService
+
+| Miembro | Declaración |
+|---|---|
+| hashToken | `hashToken(token: string): string` |
+| createSession | `createSession(params: {
+    userId: string;
+    refreshToken: string;
+    userAgent?: string;
+    ipAddress?: string;
+    expiresInDays?: number;
+  }): Promise&lt;string&gt;` |
+| rotateSession | `rotateSession(params: {
+    oldRefreshToken: string;
+    newRefreshToken: string;
+    userId: string;
+    userAgent?: string;
+    ipAddress?: string;
+    expiresInDays?: number;
+  }): Promise&lt;boolean&gt;` |
+| revokeSession | `revokeSession(refreshToken: string): Promise&lt;void&gt;` |
+
+## backend/src/common/utils/api-response.ts
+
+### ApiResponse
+
+| Miembro | Declaración |
+|---|---|
+| success | `success: boolean` |
+| data | `data: T` |
+| message | `message: string` |
+| error | `error: string` |
+### PaginationMeta
+
+| Miembro | Declaración |
+|---|---|
+| page | `page: number` |
+| pageSize | `pageSize: number` |
+| total | `total: number` |
+| totalPages | `totalPages: number` |
+### sendSuccess
+
+`export function sendSuccess&lt;T&gt;( res: Response, data: T, message = &#39;Operación exitosa&#39;, statusCode = 200 ): Response`
+
+### sendError
+
+`export function sendError(res: Response, error: string, statusCode = 400): Response`
+
+### sendPaginated
+
+`export function sendPaginated&lt;T&gt;( res: Response, items: T[], meta: PaginationMeta, message = &#39;Operación exitosa&#39; ): Response`
+
+### getPagination
+
+`export function getPagination(req: Request):`
+
+### buildPaginationMeta
+
+`export function buildPaginationMeta(page: number, pageSize: number, total: number): PaginationMeta`
+
+
+## backend/src/common/utils/audit.ts
+
+### audit
+
+`export function audit(req: Request, action: AuditAction, details: Record&lt;string, unknown&gt; =`
+
+
+## backend/src/common/utils/json.ts
+
+### safeJsonArray
+
+`export function safeJsonArray(raw: unknown): unknown[]`
+
+### safeJsonObject
+
+`export function safeJsonObject(raw: unknown): Record&lt;string, unknown&gt; | null`
+
+
+## backend/src/common/utils/ownership.ts
+
+### isAdmin
+
+`function isAdmin(role?: string): boolean`
+
+### assertProjectAccess
+
+`export async function assertProjectAccess(projectId: string, userId: string, role?: string)`
+
+### assertRequirementAccess
+
+`export async function assertRequirementAccess(requirementId: string, userId: string, role?: string)`
+
+### assertTestCaseAccess
+
+`export async function assertTestCaseAccess(testCaseId: string, userId: string, role?: string)`
+
+
+## backend/src/common/utils/retry.ts
+
+### RetryOptions
+
+| Miembro | Declaración |
+|---|---|
+| retries | `retries: number` |
+| timeoutMs | `timeoutMs: number` |
+| label | `label: string` |
+### withRetry
+
+`export async function withRetry&lt;T&gt;( fn: (signal: AbortSignal) =&gt; Promise&lt;T&gt;,`
+
+
+## backend/src/config/ai-pricing.ts
+
+### ModelPricing
+
+| Miembro | Declaración |
+|---|---|
+| inputPerMillion | `inputPerMillion: number` |
+| outputPerMillion | `outputPerMillion: number` |
+### calculateAICost
+
+`export function calculateAICost( model: string, inputTokens: number, outputTokens: number ): number | null`
+
+
+## backend/src/config/env.ts
+
+### getCorsOrigins
+
+`export function getCorsOrigins(): string[] | &#39;*&#39;`
+
+
+## backend/src/config/prisma.ts
+
+### initDatabaseConnection
+
+`export async function initDatabaseConnection(): Promise&lt;boolean&gt;`
+
+### disconnectDatabase
+
+`export async function disconnectDatabase(): Promise&lt;void&gt;`
+
+
+## backend/src/config/swagger.ts
+
+### mountSwagger
+
+`export function mountSwagger(app: Express)`
+
+
+## backend/src/core/adapters/gemini.adapter.ts
+
+### GeminiAdapter
+
+| Miembro | Declaración |
+|---|---|
+| providerName | `providerName: tipo inferido` |
+| generateTestCases | `generateTestCases(requirementCode: string, requirementTitle: string, description: string, acceptanceCriteria: string, options?: GenerateOptions): Promise&lt;AIGenerationResult&gt;` |
+
+## backend/src/core/adapters/openai.adapter.ts
+
+### OpenAIAdapter
+
+| Miembro | Declaración |
+|---|---|
+| providerName | `providerName: tipo inferido` |
+| generateTestCases | `generateTestCases(requirementCode: string, requirementTitle: string, description: string, acceptanceCriteria: string, options?: GenerateOptions): Promise&lt;AIGenerationResult&gt;` |
+
+## backend/src/core/ai.factory.ts
+
+### AIFactory
+
+| Miembro | Declaración |
+|---|---|
+| registry | `registry: Map&lt;string, AIProviderFactoryFn&gt;` |
+| instances | `instances: Map&lt;string, IAIProvider&gt;` |
+| registerProvider | `registerProvider(name: string, factoryFn: AIProviderFactoryFn): void` |
+| getProvider | `getProvider(providerName?: string): IAIProvider` |
+| hasProvider | `hasProvider(name: string): boolean` |
+| getAvailableProviders | `getAvailableProviders(): string[]` |
+
+## backend/src/core/domain/entities/project.entity.ts
+
+### ProjectEntityProps
+
+| Miembro | Declaración |
+|---|---|
+| id | `id: string` |
+| name | `name: string` |
+| description | `description: string \| null` |
+| ownerId | `ownerId: string` |
+| status | `status: &#39;ACTIVE&#39; \| &#39;ARCHIVED&#39;` |
+| budgetUsd | `budgetUsd: number \| null` |
+| nextRequirementNumber | `nextRequirementNumber: number` |
+| createdAt | `createdAt: Date` |
+| updatedAt | `updatedAt: Date` |
+### ProjectEntity
+
+| Miembro | Declaración |
+|---|---|
+| id | `id: string` |
+| _name | `_name: string` |
+| _description | `_description: string \| null` |
+| ownerId | `ownerId: string` |
+| _status | `_status: &#39;ACTIVE&#39; \| &#39;ARCHIVED&#39;` |
+| _budgetUsd | `_budgetUsd: number \| null` |
+| _nextRequirementNumber | `_nextRequirementNumber: number` |
+| createdAt | `createdAt: Date` |
+| updatedAt | `updatedAt: Date` |
+| constructor | `constructor(props: ProjectEntityProps): retorno inferido` |
+| name | `name: string` |
+| description | `description: string \| null` |
+| status | `status: &#39;ACTIVE&#39; \| &#39;ARCHIVED&#39;` |
+| budgetUsd | `budgetUsd: number \| null` |
+| nextRequirementNumber | `nextRequirementNumber: number` |
+| isActive | `isActive(): boolean` |
+| isArchived | `isArchived(): boolean` |
+| archive | `archive(): void` |
+| reactivate | `reactivate(): void` |
+| updateDetails | `updateDetails(name: string, description?: string \| null, budgetUsd?: number \| null): void` |
+| allocateNextRequirementCode | `allocateNextRequirementCode(): string` |
+
+## backend/src/core/domain/entities/requirement.entity.ts
+
+### RequirementEntityProps
+
+| Miembro | Declaración |
+|---|---|
+| id | `id: string` |
+| projectId | `projectId: string` |
+| code | `code: string` |
+| title | `title: string` |
+| description | `description: string` |
+| acceptanceCriteria | `acceptanceCriteria: string` |
+| version | `version: number` |
+| status | `status: &#39;READY_FOR_AI&#39; \| &#39;GENERATED&#39; \| &#39;OBSOLETE&#39;` |
+| nextCaseNumber | `nextCaseNumber: number` |
+| createdAt | `createdAt: Date` |
+| updatedAt | `updatedAt: Date` |
+### RequirementEntity
+
+| Miembro | Declaración |
+|---|---|
+| id | `id: string` |
+| projectId | `projectId: string` |
+| code | `code: string` |
+| _title | `_title: string` |
+| _description | `_description: string` |
+| _acceptanceCriteria | `_acceptanceCriteria: string` |
+| _version | `_version: number` |
+| _status | `_status: &#39;READY_FOR_AI&#39; \| &#39;GENERATED&#39; \| &#39;OBSOLETE&#39;` |
+| _nextCaseNumber | `_nextCaseNumber: number` |
+| createdAt | `createdAt: Date` |
+| updatedAt | `updatedAt: Date` |
+| constructor | `constructor(props: RequirementEntityProps): retorno inferido` |
+| title | `title: string` |
+| description | `description: string` |
+| acceptanceCriteria | `acceptanceCriteria: string` |
+| version | `version: number` |
+| status | `status: &#39;READY_FOR_AI&#39; \| &#39;GENERATED&#39; \| &#39;OBSOLETE&#39;` |
+| nextCaseNumber | `nextCaseNumber: number` |
+| updateContent | `updateContent(title: string, description: string, acceptanceCriteria: string): void` |
+| markAsGenerated | `markAsGenerated(): void` |
+| markAsObsolete | `markAsObsolete(): void` |
+| allocateNextCaseCode | `allocateNextCaseCode(): string` |
+
+## backend/src/core/domain/entities/test-case.entity.ts
+
+### TestCaseProps
+
+| Miembro | Declaración |
+|---|---|
+| id | `id: string` |
+| requirementId | `requirementId: string` |
+| code | `code: TestCaseCode` |
+| type | `type: ISTQBTechnique` |
+| title | `title: string` |
+| preconditions | `preconditions: string[]` |
+| steps | `steps: string[]` |
+| testData | `testData: string \| null` |
+| expectedResult | `expectedResult: string` |
+| priority | `priority: TestCasePriority` |
+| status | `status: TestCaseStatus` |
+| version | `version: number` |
+| source | `source: &#39;MANUAL&#39; \| &#39;RULE_BASED&#39; \| &#39;AI_GENERATED&#39;` |
+| evidenceStatus | `evidenceStatus: &#39;derived&#39; \| &#39;suggested&#39; \| &#39;ambiguous&#39; \| &#39;conflict&#39;` |
+| evidenceText | `evidenceText: string \| null` |
+| isObsolete | `isObsolete: boolean` |
+| generationId | `generationId: string \| null` |
+| requirementVersion | `requirementVersion: number` |
+| originalContent | `originalContent: Record&lt;string, unknown&gt; \| null` |
+| createdAt | `createdAt: Date` |
+| updatedAt | `updatedAt: Date` |
+### TestCaseEntity
+
+| Miembro | Declaración |
+|---|---|
+| props | `props: TestCaseProps` |
+| constructor | `constructor(props: TestCaseProps): retorno inferido` |
+| id | `id: string` |
+| requirementId | `requirementId: string` |
+| code | `code: TestCaseCode` |
+| type | `type: ISTQBTechnique` |
+| title | `title: string` |
+| preconditions | `preconditions: string[]` |
+| steps | `steps: string[]` |
+| testData | `testData: string \| null` |
+| expectedResult | `expectedResult: string` |
+| priority | `priority: TestCasePriority` |
+| status | `status: TestCaseStatus` |
+| version | `version: number` |
+| source | `source: string` |
+| evidenceStatus | `evidenceStatus: string` |
+| evidenceText | `evidenceText: string \| null` |
+| isObsolete | `isObsolete: boolean` |
+| generationId | `generationId: string \| null` |
+| requirementVersion | `requirementVersion: number` |
+| originalContent | `originalContent: Record&lt;string, unknown&gt; \| null` |
+| createdAt | `createdAt: Date` |
+| updatedAt | `updatedAt: Date` |
+| approve | `approve(reviewerId: string, _comments?: string): void` |
+| reject | `reject(reviewerId: string, reason: string): void` |
+| modify | `modify(updates: Partial&lt;Omit&lt;TestCaseProps, &#39;id&#39; \| &#39;requirementId&#39; \| &#39;code&#39; \| &#39;version&#39;&gt;&gt;): void` |
+| assertVersionMatch | `assertVersionMatch(expectedVersion?: number): void` |
+| toJSON | `toJSON(): Record&lt;string, unknown&gt;` |
+
+## backend/src/core/domain/entities/test-run.entity.ts
+
+### TestExecutionResultProps
+
+| Miembro | Declaración |
+|---|---|
+| id | `id: string` |
+| testRunId | `testRunId: string` |
+| testCaseId | `testCaseId: string` |
+| code | `code: string` |
+| title | `title: string` |
+| status | `status: ExecutionStatus` |
+| durationSeconds | `durationSeconds: number` |
+| executedAt | `executedAt: Date \| null` |
+| executedBy | `executedBy: string \| null` |
+| evidenceText | `evidenceText: string \| null` |
+| defectNotes | `defectNotes: string \| null` |
+| defectLogged | `defectLogged: boolean` |
+### TestRunEntityProps
+
+| Miembro | Declaración |
+|---|---|
+| id | `id: string` |
+| projectId | `projectId: string` |
+| name | `name: string` |
+| environment | `environment: string` |
+| status | `status: &#39;IN_PROGRESS&#39; \| &#39;COMPLETED&#39;` |
+| createdAt | `createdAt: Date` |
+| updatedAt | `updatedAt: Date` |
+| executions | `executions: TestExecutionResultProps[]` |
+### TestRunEntity
+
+| Miembro | Declaración |
+|---|---|
+| id | `id: string` |
+| projectId | `projectId: string` |
+| _name | `_name: string` |
+| _environment | `_environment: string` |
+| _status | `_status: &#39;IN_PROGRESS&#39; \| &#39;COMPLETED&#39;` |
+| createdAt | `createdAt: Date` |
+| updatedAt | `updatedAt: Date` |
+| _executions | `_executions: TestExecutionResultProps[]` |
+| constructor | `constructor(props: TestRunEntityProps): retorno inferido` |
+| name | `name: string` |
+| environment | `environment: string` |
+| status | `status: &#39;IN_PROGRESS&#39; \| &#39;COMPLETED&#39;` |
+| executions | `executions: ReadonlyArray&lt;TestExecutionResultProps&gt;` |
+| complete | `complete(): void` |
+| getMetrics | `getMetrics(): retorno inferido` |
+
+## backend/src/core/domain/mappers/test-case.mapper.ts
+
+### PrismaTestCaseRow
+
+| Miembro | Declaración |
+|---|---|
+| id | `id: string` |
+| requirementId | `requirementId: string` |
+| code | `code: string` |
+| type | `type: string` |
+| title | `title: string` |
+| preconditions | `preconditions: unknown` |
+| steps | `steps: unknown` |
+| testData | `testData: string \| null` |
+| expectedResult | `expectedResult: string` |
+| priority | `priority: string` |
+| status | `status: string` |
+| version | `version: number` |
+| source | `source: string` |
+| evidenceStatus | `evidenceStatus: string` |
+| evidenceText | `evidenceText: string \| null` |
+| isObsolete | `isObsolete: boolean` |
+| generationId | `generationId: string \| null` |
+| requirementVersion | `requirementVersion: number` |
+| originalContent | `originalContent: unknown` |
+| createdAt | `createdAt: Date` |
+| updatedAt | `updatedAt: Date` |
+| reviews | `reviews: Array&lt;{
+    id: string;
+    decision: string;
+    comments: string \| null;
+    previousContent: unknown;
+    newContent: unknown;
+    createdAt: Date;
+    reviewer?: { id: string; fullName: string; role: string };
+  }&gt;` |
+### TestCaseMapper
+
+| Miembro | Declaración |
+|---|---|
+| toDomain | `toDomain(row: PrismaTestCaseRow): TestCaseEntity` |
+| toPersistence | `toPersistence(entity: TestCaseEntity): retorno inferido` |
+| toDTO | `toDTO(row: PrismaTestCaseRow): retorno inferido` |
+
+## backend/src/core/domain/security/security-policy.ts
+
+### DomainSecurityException
+
+| Miembro | Declaración |
+|---|---|
+| constructor | `constructor(message: string, public readonly code: string = &#39;FORBIDDEN&#39;): retorno inferido` |
+### ResourceNotFoundDomainException
+
+| Miembro | Declaración |
+|---|---|
+| constructor | `constructor(message: string): retorno inferido` |
+### SecurityUserContext
+
+| Miembro | Declaración |
+|---|---|
+| userId | `userId: string` |
+| role | `role: string` |
+### SecurityPolicy
+
+| Miembro | Declaración |
+|---|---|
+| isAdmin | `isAdmin(role: string): boolean` |
+| canAccessProject | `canAccessProject(projectOwnerId: string, user: SecurityUserContext): boolean` |
+| assertProjectAccess | `assertProjectAccess(projectOwnerId: string, user: SecurityUserContext, projectName: string = &#39;proyecto&#39;): void` |
+| canExecuteTestCaseReview | `canExecuteTestCaseReview(user: SecurityUserContext): boolean` |
+| assertCanReview | `assertCanReview(user: SecurityUserContext): void` |
+
+## backend/src/core/domain/services/requirement-fingerprint.service.ts
+
+### FingerprintInputs
+
+| Miembro | Declaración |
+|---|---|
+| code | `code: string` |
+| title | `title: string` |
+| description | `description: string` |
+| acceptanceCriteria | `acceptanceCriteria: string` |
+| provider | `provider: string` |
+| model | `model: string` |
+### IFingerprintStrategy
+
+| Miembro | Declaración |
+|---|---|
+| compute | `compute: string` |
+### Sha256FingerprintStrategy
+
+| Miembro | Declaración |
+|---|---|
+| compute | `compute(inputs: FingerprintInputs): string` |
+### RequirementFingerprintService
+
+| Miembro | Declaración |
+|---|---|
+| defaultStrategy | `defaultStrategy: IFingerprintStrategy` |
+| setStrategy | `setStrategy(strategy: IFingerprintStrategy): void` |
+| compute | `compute(inputs: FingerprintInputs): string` |
+
+## backend/src/core/domain/value-objects/entity-codes.vo.ts
+
+### TestCasePriority
+
+| Miembro | Declaración |
+|---|---|
+| HIGH | `HIGH: tipo inferido` |
+| MEDIUM | `MEDIUM: tipo inferido` |
+| LOW | `LOW: tipo inferido` |
+| constructor | `constructor(private readonly level: PriorityLevel): retorno inferido` |
+| from | `from(raw?: string \| null): TestCasePriority` |
+| getLevel | `getLevel(): PriorityLevel` |
+| getNumericWeight | `getNumericWeight(): number` |
+| isHigh | `isHigh(): boolean` |
+| equals | `equals(other: TestCasePriority): boolean` |
+| toString | `toString(): string` |
+### TestCaseCode
+
+| Miembro | Declaración |
+|---|---|
+| constructor | `constructor(private readonly code: string): retorno inferido` |
+| from | `from(raw: string): TestCaseCode` |
+| getValue | `getValue(): string` |
+| equals | `equals(other: TestCaseCode): boolean` |
+| toString | `toString(): string` |
+### RequirementCode
+
+| Miembro | Declaración |
+|---|---|
+| constructor | `constructor(private readonly code: string): retorno inferido` |
+| from | `from(raw: string): RequirementCode` |
+| getValue | `getValue(): string` |
+| equals | `equals(other: RequirementCode): boolean` |
+| toString | `toString(): string` |
+
+## backend/src/core/domain/value-objects/istqb-technique.vo.ts
+
+### ISTQBTechnique
+
+| Miembro | Declaración |
+|---|---|
+| VALID_TECHNIQUES | `VALID_TECHNIQUES: Set&lt;string&gt;` |
+| POSITIVE | `POSITIVE: tipo inferido` |
+| NEGATIVE | `NEGATIVE: tipo inferido` |
+| BOUNDARY | `BOUNDARY: tipo inferido` |
+| VALIDATION | `VALIDATION: tipo inferido` |
+| ALTERNATIVE | `ALTERNATIVE: tipo inferido` |
+| DECISION_TABLE | `DECISION_TABLE: tipo inferido` |
+| STATE_TRANSITION | `STATE_TRANSITION: tipo inferido` |
+| PAIRWISE | `PAIRWISE: tipo inferido` |
+| CTM | `CTM: tipo inferido` |
+| ERROR_GUESSING | `ERROR_GUESSING: tipo inferido` |
+| constructor | `constructor(private readonly value: ISTQBTechniqueType): retorno inferido` |
+| from | `from(raw: string): ISTQBTechnique` |
+| getValue | `getValue(): ISTQBTechniqueType` |
+| isBoundary | `isBoundary(): boolean` |
+| isCombinatorial | `isCombinatorial(): boolean` |
+| isStateTransition | `isStateTransition(): boolean` |
+| isSecurityOrNegative | `isSecurityOrNegative(): boolean` |
+| isBlackBox | `isBlackBox(): boolean` |
+| isExperienceBased | `isExperienceBased(): boolean` |
+| equals | `equals(other: ISTQBTechnique): boolean` |
+| toString | `toString(): string` |
+
+## backend/src/core/domain/value-objects/test-case-status.vo.ts
+
+### TestCaseStatus
+
+| Miembro | Declaración |
+|---|---|
+| VALID_STATUSES | `VALID_STATUSES: Set&lt;TestCaseStatusType&gt;` |
+| PENDING | `PENDING: tipo inferido` |
+| APPROVED | `APPROVED: tipo inferido` |
+| MODIFIED | `MODIFIED: tipo inferido` |
+| REJECTED | `REJECTED: tipo inferido` |
+| constructor | `constructor(private readonly value: TestCaseStatusType): retorno inferido` |
+| from | `from(raw: string): TestCaseStatus` |
+| getValue | `getValue(): TestCaseStatusType` |
+| isApproved | `isApproved(): boolean` |
+| isPending | `isPending(): boolean` |
+| isRejected | `isRejected(): boolean` |
+| isModified | `isModified(): boolean` |
+| canTransitionTo | `canTransitionTo(next: TestCaseStatus): boolean` |
+| equals | `equals(other: TestCaseStatus): boolean` |
+| toString | `toString(): string` |
+
+## backend/src/core/interfaces/ai-provider.interface.ts
+
+### RawGeneratedCase
+
+| Miembro | Declaración |
+|---|---|
+| type | `type: TestCaseType` |
+| title | `title: string` |
+| preconditions | `preconditions: string[]` |
+| steps | `steps: string[]` |
+| testData | `testData: string \| null` |
+| expectedResult | `expectedResult: string` |
+| priority | `priority: PriorityLevel` |
+| evidenceStatus | `evidenceStatus: EvidenceStatus` |
+| evidenceText | `evidenceText: string \| null` |
+### AIGenerationResult
+
+| Miembro | Declaración |
+|---|---|
+| provider | `provider: &#39;gemini&#39; \| &#39;openai&#39;` |
+| model | `model: string` |
+| promptVersion | `promptVersion: string` |
+| inputTokens | `inputTokens: number` |
+| outputTokens | `outputTokens: number` |
+| responseTimeMs | `responseTimeMs: number` |
+| estimatedCost | `estimatedCost: number \| null` |
+| cases | `cases: RawGeneratedCase[]` |
+### GenerateOptions
+
+| Miembro | Declaración |
+|---|---|
+| model | `model: string` |
+| temperature | `temperature: number` |
+| maxOutputTokens | `maxOutputTokens: number` |
+### IAIProvider
+
+| Miembro | Declaración |
+|---|---|
+| providerName | `providerName: &#39;gemini&#39; \| &#39;openai&#39;` |
+| generateTestCases | `generateTestCases: Promise&lt;AIGenerationResult&gt;` |
+
+## backend/src/core/ports/project-repository.port.ts
+
+### ProjectFilter
+
+| Miembro | Declaración |
+|---|---|
+| ownerId | `ownerId: string` |
+| status | `status: string` |
+| search | `search: string` |
+### IProjectRepository
+
+| Miembro | Declaración |
+|---|---|
+| findById | `findById: Promise&lt;ProjectEntity \| null&gt;` |
+| findByOwner | `findByOwner: Promise&lt;PaginatedResult&lt;ProjectEntity&gt;&gt;` |
+| create | `create: Promise&lt;ProjectEntity&gt;` |
+| update | `update: Promise&lt;ProjectEntity&gt;` |
+| archive | `archive: Promise&lt;boolean&gt;` |
+| delete | `delete: Promise&lt;boolean&gt;` |
+
+## backend/src/core/ports/requirement-repository.port.ts
+
+### RequirementFilter
+
+| Miembro | Declaración |
+|---|---|
+| projectId | `projectId: string` |
+| status | `status: string` |
+| search | `search: string` |
+### IRequirementRepository
+
+| Miembro | Declaración |
+|---|---|
+| findById | `findById: Promise&lt;RequirementEntity \| null&gt;` |
+| findByProjectId | `findByProjectId: Promise&lt;PaginatedResult&lt;RequirementEntity&gt;&gt;` |
+| save | `save: Promise&lt;void&gt;` |
+| createVersion | `createVersion: Promise&lt;number&gt;` |
+| delete | `delete: Promise&lt;boolean&gt;` |
+
+## backend/src/core/ports/test-case-repository.port.ts
+
+### TestCaseFilter
+
+| Miembro | Declaración |
+|---|---|
+| requirementId | `requirementId: string` |
+| projectId | `projectId: string` |
+| status | `status: string` |
+| search | `search: string` |
+### PaginationOptions
+
+| Miembro | Declaración |
+|---|---|
+| skip | `skip: number` |
+| take | `take: number` |
+| page | `page: number` |
+| pageSize | `pageSize: number` |
+### PaginatedResult
+
+| Miembro | Declaración |
+|---|---|
+| items | `items: T[]` |
+| total | `total: number` |
+### ITestCaseRepository
+
+| Miembro | Declaración |
+|---|---|
+| findById | `findById: Promise&lt;TestCaseEntity \| null&gt;` |
+| findByRequirementId | `findByRequirementId: Promise&lt;TestCaseEntity[]&gt;` |
+| findByProjectId | `findByProjectId: Promise&lt;PaginatedResult&lt;TestCaseEntity&gt;&gt;` |
+| save | `save: Promise&lt;void&gt;` |
+| saveBatch | `saveBatch: Promise&lt;void&gt;` |
+| delete | `delete: Promise&lt;boolean&gt;` |
+
+## backend/src/core/ports/test-run-repository.port.ts
+
+### ITestRunRepository
+
+| Miembro | Declaración |
+|---|---|
+| findById | `findById: Promise&lt;TestRunEntity \| null&gt;` |
+| findByProjectId | `findByProjectId: Promise&lt;TestRunEntity[]&gt;` |
+| create | `create: Promise&lt;TestRunEntity&gt;` |
+| recordExecution | `recordExecution: Promise&lt;TestExecutionResultProps&gt;` |
+| logDefect | `logDefect: Promise&lt;TestExecutionResultProps&gt;` |
+
+## backend/src/core/prompts/prompt-builder.ts
+
+### PromptPayload
+
+| Miembro | Declaración |
+|---|---|
+| systemPrompt | `systemPrompt: string` |
+| userPrompt | `userPrompt: string` |
+| version | `version: string` |
+### buildPromptForRequirement
+
+`export function buildPromptForRequirement( code: string, title: string, description: string, acceptanceCriteria: string ): PromptPayload`
+
+
+## backend/src/core/spec-engine/catalog/actors.ts
+
+### findActor
+
+`export function findActor(key: string): ActorDefinition | undefined`
+
+
+## backend/src/core/spec-engine/catalog/entities.ts
+
+### findEntity
+
+`export function findEntity(key: string): EntityDefinition | undefined`
+
+
+## backend/src/core/spec-engine/catalog/index.ts
+
+### findModule
+
+`export function findModule(key: string): DomainModule | undefined`
+
+### NonFunctionalTemplate
+
+| Miembro | Declaración |
+|---|---|
+| requiresModules | `requiresModules: string[]` |
+| template | `template: RequirementTemplate` |
+### EntityWords
+
+| Miembro | Declaración |
+|---|---|
+| singular | `singular: string` |
+| plural | `plural: string` |
+| singularCap | `singularCap: string` |
+| pluralCap | `pluralCap: string` |
+| art | `art: string` |
+| arts | `arts: string` |
+| un | `un: string` |
+| nuevo | `nuevo: string` |
+| registrado | `registrado: string` |
+| lo | `lo: string` |
+### entityWords
+
+`function entityWords(entity: EntitySpec): EntityWords`
+
+### sampleValue
+
+`function sampleValue(field: EntityField, words: EntityWords): string`
+
+### fieldConstraint
+
+`function fieldConstraint(field: EntityField): string`
+
+### toVariable
+
+`function toVariable(field: EntityField): BvaVariableInput | null`
+
+### buildEntityCrudUseCase
+
+`export function buildEntityCrudUseCase(entity: EntitySpec): UseCaseTemplate`
+
+### getCatalogStats
+
+`export function getCatalogStats()`
+
+
+## backend/src/core/spec-engine/project-spec-engine.ts
+
+### SpecEngineInput
+
+| Miembro | Declaración |
+|---|---|
+| name | `name: string` |
+| description | `description: string` |
+### SpecEngineOptions
+
+| Miembro | Declaración |
+|---|---|
+| depth | `depth: DerivationDepth` |
+| includeNonFunctional | `includeNonFunctional: boolean` |
+| includeEntityCrud | `includeEntityCrud: boolean` |
+| maxModules | `maxModules: number` |
+| maxEntities | `maxEntities: number` |
+### HydrationContext
+
+| Miembro | Declaración |
+|---|---|
+| actor | `actor: string` |
+| admin | `admin: string` |
+| project | `project: string` |
+### ScoredModule
+
+| Miembro | Declaración |
+|---|---|
+| module | `module: DomainModule` |
+| score | `score: number` |
+| matched | `matched: string[]` |
+| implied | `implied: boolean` |
+| order | `order: number` |
+### ProjectSpecEngine
+
+| Miembro | Declaración |
+|---|---|
+| analyze | `analyze(input: SpecEngineInput, options: SpecEngineOptions = {}): ProjectSpecification` |
+| hydrate | `hydrate(text: string, ctx: HydrationContext): string` |
+| detectActors | `detectActors(normalized: string): Array&lt;ActorDefinition &amp; { score: number }&gt;` |
+| detectModules | `detectModules(normalized: string, maxModules: number, warnings: string[]): ScoredModule[]` |
+| detectEntities | `detectEntities(normalized: string, covered: Set&lt;string&gt;, detectedModuleTerms: Set&lt;string&gt;, maxEntities: number): EntitySpec[]` |
+| guessGender | `guessGender(word: string): &#39;m&#39; \| &#39;f&#39;` |
+
+## backend/src/core/spec-engine/spec-types.ts
+
+### ScenarioTemplate
+
+| Miembro | Declaración |
+|---|---|
+| name | `name: string` |
+| type | `type: ScenarioType` |
+| given | `given: string[]` |
+| when | `when: string[]` |
+| then | `then: string[]` |
+### RequirementTemplate
+
+| Miembro | Declaración |
+|---|---|
+| key | `key: string` |
+| title | `title: string` |
+| description | `description: string` |
+| priority | `priority: Priority` |
+| kind | `kind: RequirementKind` |
+| scenarios | `scenarios: ScenarioTemplate[]` |
+| variables | `variables: BvaVariableInput[]` |
+| templateCategory | `templateCategory: string` |
+### FlowAlternative
+
+| Miembro | Declaración |
+|---|---|
+| name | `name: string` |
+| condition | `condition: string` |
+| steps | `steps: string[]` |
+### FlowException
+
+| Miembro | Declaración |
+|---|---|
+| name | `name: string` |
+| trigger | `trigger: string` |
+| steps | `steps: string[]` |
+| expectedError | `expectedError: string` |
+### UseCaseTemplate
+
+| Miembro | Declaración |
+|---|---|
+| key | `key: string` |
+| name | `name: string` |
+| actor | `actor: ActorRole` |
+| priority | `priority: Priority` |
+| description | `description: string` |
+| preconditions | `preconditions: string[]` |
+| mainFlow | `mainFlow: string[]` |
+| alternativeFlows | `alternativeFlows: FlowAlternative[]` |
+| exceptionFlows | `exceptionFlows: FlowException[]` |
+| postconditions | `postconditions: string[]` |
+| requirements | `requirements: RequirementTemplate[]` |
+### KeywordRule
+
+| Miembro | Declaración |
+|---|---|
+| term | `term: string` |
+| weight | `weight: number` |
+### DomainModule
+
+| Miembro | Declaración |
+|---|---|
+| key | `key: string` |
+| name | `name: string` |
+| icon | `icon: string` |
+| description | `description: string` |
+| keywords | `keywords: KeywordRule[]` |
+| preferredActors | `preferredActors: string[]` |
+| secondaryActors | `secondaryActors: string[]` |
+| coveredEntities | `coveredEntities: string[]` |
+| implies | `implies: string[]` |
+| templateCategory | `templateCategory: string` |
+| useCases | `useCases: UseCaseTemplate[]` |
+### ActorDefinition
+
+| Miembro | Declaración |
+|---|---|
+| key | `key: string` |
+| label | `label: string` |
+| description | `description: string` |
+| keywords | `keywords: string[]` |
+| isAdmin | `isAdmin: boolean` |
+### EntityField
+
+| Miembro | Declaración |
+|---|---|
+| name | `name: string` |
+| type | `type: EntityFieldType` |
+| required | `required: boolean` |
+| unique | `unique: boolean` |
+| min | `min: number` |
+| max | `max: number` |
+| unit | `unit: string` |
+| options | `options: string[]` |
+| example | `example: string` |
+### EntityDefinition
+
+| Miembro | Declaración |
+|---|---|
+| key | `key: string` |
+| singular | `singular: string` |
+| plural | `plural: string` |
+| gender | `gender: &#39;m&#39; \| &#39;f&#39;` |
+| keywords | `keywords: string[]` |
+| fields | `fields: EntityField[]` |
+### ActorSpec
+
+| Miembro | Declaración |
+|---|---|
+| key | `key: string` |
+| label | `label: string` |
+| description | `description: string` |
+| isAdmin | `isAdmin: boolean` |
+| source | `source: &#39;detected&#39; \| &#39;default&#39;` |
+| score | `score: number` |
+### ModuleSpec
+
+| Miembro | Declaración |
+|---|---|
+| key | `key: string` |
+| name | `name: string` |
+| icon | `icon: string` |
+| description | `description: string` |
+| score | `score: number` |
+| matchedKeywords | `matchedKeywords: string[]` |
+| implied | `implied: boolean` |
+### EntitySpec
+
+| Miembro | Declaración |
+|---|---|
+| key | `key: string` |
+| singular | `singular: string` |
+| plural | `plural: string` |
+| gender | `gender: &#39;m&#39; \| &#39;f&#39;` |
+| score | `score: number` |
+| source | `source: &#39;catalog&#39; \| &#39;pattern&#39;` |
+| fields | `fields: EntityField[]` |
+### UseCaseSpec
+
+| Miembro | Declaración |
+|---|---|
+| code | `code: string` |
+| key | `key: string` |
+| name | `name: string` |
+| actor | `actor: string` |
+| moduleKey | `moduleKey: string` |
+| moduleName | `moduleName: string` |
+| priority | `priority: Priority` |
+| description | `description: string` |
+| preconditions | `preconditions: string[]` |
+| mainFlow | `mainFlow: string[]` |
+| alternativeFlows | `alternativeFlows: FlowAlternative[]` |
+| exceptionFlows | `exceptionFlows: FlowException[]` |
+| postconditions | `postconditions: string[]` |
+| requirementCodes | `requirementCodes: string[]` |
+### RequirementSpec
+
+| Miembro | Declaración |
+|---|---|
+| code | `code: string` |
+| key | `key: string` |
+| title | `title: string` |
+| description | `description: string` |
+| acceptanceCriteria | `acceptanceCriteria: string` |
+| priority | `priority: Priority` |
+| kind | `kind: RequirementKind` |
+| moduleKey | `moduleKey: string` |
+| useCaseCode | `useCaseCode: string \| null` |
+| scenarios | `scenarios: ScenarioTemplate[]` |
+| variables | `variables: BvaVariableInput[]` |
+| templateCategory | `templateCategory: string \| null` |
+| estimatedTestCases | `estimatedTestCases: number` |
+### SpecificationSummary
+
+| Miembro | Declaración |
+|---|---|
+| engineVersion | `engineVersion: string` |
+| depth | `depth: DerivationDepth` |
+| actorsDetected | `actorsDetected: number` |
+| modulesDetected | `modulesDetected: number` |
+| entitiesDetected | `entitiesDetected: number` |
+| totalUseCases | `totalUseCases: number` |
+| totalRequirements | `totalRequirements: number` |
+| functionalRequirements | `functionalRequirements: number` |
+| nonFunctionalRequirements | `nonFunctionalRequirements: number` |
+| estimatedTestCases | `estimatedTestCases: number` |
+### ProjectSpecification
+
+| Miembro | Declaración |
+|---|---|
+| project | `project: { name: string; description: string }` |
+| summary | `summary: SpecificationSummary` |
+| actors | `actors: ActorSpec[]` |
+| modules | `modules: ModuleSpec[]` |
+| entities | `entities: EntitySpec[]` |
+| useCases | `useCases: UseCaseSpec[]` |
+| requirements | `requirements: RequirementSpec[]` |
+| warnings | `warnings: string[]` |
+
+## backend/src/core/spec-engine/test-deriver.ts
+
+### DerivationInput
+
+| Miembro | Declaración |
+|---|---|
+| code | `code: string` |
+| title | `title: string` |
+| description | `description: string` |
+| acceptanceCriteria | `acceptanceCriteria: string` |
+| priority | `priority: Priority` |
+| variables | `variables: BvaVariableInput[]` |
+| templateCategory | `templateCategory: string \| null` |
+| useCase | `useCase: UseCaseInput \| null` |
+| useCaseCode | `useCaseCode: string \| null` |
+| depth | `depth: DerivationDepth` |
+### DerivedTestCase
+
+| Miembro | Declaración |
+|---|---|
+| type | `type: ScenarioType` |
+| title | `title: string` |
+| preconditions | `preconditions: string[]` |
+| steps | `steps: string[]` |
+| testData | `testData: string \| null` |
+| expectedResult | `expectedResult: string` |
+| priority | `priority: Priority` |
+| evidenceStatus | `evidenceStatus: &#39;derived&#39; \| &#39;suggested&#39;` |
+| evidenceText | `evidenceText: string \| null` |
+| technique | `technique: string` |
+### DeterministicTestDeriver
+
+| Miembro | Declaración |
+|---|---|
+| derive | `derive(input: DerivationInput): DerivedTestCase[]` |
+| estimate | `estimate(input: DerivationInput): number` |
+| buildUseCaseInput | `buildUseCaseInput(uc: {
+    name: string;
+    actor: string;
+    mainFlow: string[];
+    alternativeFlows: FlowAlternative[];
+    exceptionFlows: FlowException[];
+  }): UseCaseInput` |
+| fromGherkin | `fromGherkin(input: DerivationInput): DerivedTestCase[]` |
+| fromUseCase | `fromUseCase(input: DerivationInput): DerivedTestCase[]` |
+| fromVariables | `fromVariables(input: DerivationInput, depth: DerivationDepth): DerivedTestCase[]` |
+| fromTemplate | `fromTemplate(input: DerivationInput): DerivedTestCase[]` |
+| fromErrorGuessing | `fromErrorGuessing(input: DerivationInput): DerivedTestCase[]` |
+| fallbackCases | `fallbackCases(input: DerivationInput): DerivedTestCase[]` |
+| collectVariables | `collectVariables(input: DerivationInput, max: number): BvaVariableInput[]` |
+| priorityFor | `priorityFor(type: ScenarioType, base?: Priority): Priority` |
+| stripNumbering | `stripNumbering(step: string): string` |
+| dedupe | `dedupe(cases: DerivedTestCase[]): DerivedTestCase[]` |
+
+## backend/src/core/spec-engine/text-normalizer.ts
+
+### TextNormalizer
+
+| Miembro | Declaración |
+|---|---|
+| STOPWORDS | `STOPWORDS: ReadonlySet&lt;string&gt;` |
+| stripAccents | `stripAccents(input: string): string` |
+| normalize | `normalize(input: string): string` |
+| tokenize | `tokenize(input: string): string[]` |
+| countOccurrences | `countOccurrences(normalizedText: string, phrase: string): number` |
+| singularize | `singularize(word: string): string` |
+| pluralize | `pluralize(word: string): string` |
+| capitalize | `capitalize(input: string): string` |
+| comparisonKey | `comparisonKey(input: string): string` |
+
+## backend/src/core/templates/istqb-templates.ts
+
+### TemplateCase
+
+| Miembro | Declaración |
+|---|---|
+| type | `type: &#39;positive&#39; \| &#39;negative&#39; \| &#39;alternative&#39; \| &#39;boundary&#39; \| &#39;validation&#39;` |
+| titleTemplate | `titleTemplate: string` |
+| preconditions | `preconditions: string[]` |
+| steps | `steps: string[]` |
+| expectedResultTemplate | `expectedResultTemplate: string` |
+| priority | `priority: &#39;high&#39; \| &#39;medium&#39; \| &#39;low&#39;` |
+| evidenceStatus | `evidenceStatus: &#39;derived&#39; \| &#39;suggested&#39;` |
+### TemplateCategory
+
+| Miembro | Declaración |
+|---|---|
+| key | `key: string` |
+| name | `name: string` |
+| description | `description: string` |
+| icon | `icon: string` |
+| cases | `cases: TemplateCase[]` |
+### hydrateTemplate
+
+`export function hydrateTemplate(template: TemplateCase, reqTitle: string): TemplateCase`
+
+
+## backend/src/core/test-design/bva-engine.ts
+
+### BvaVariableInput
+
+| Miembro | Declaración |
+|---|---|
+| name | `name: string` |
+| type | `type: BvaVariableType` |
+| min | `min: number` |
+| max | `max: number` |
+| unit | `unit: string` |
+| decimals | `decimals: number` |
+### BvaCalculatedCase
+
+| Miembro | Declaración |
+|---|---|
+| type | `type: &#39;positive&#39; \| &#39;negative&#39; \| &#39;boundary&#39; \| &#39;validation&#39;` |
+| title | `title: string` |
+| preconditions | `preconditions: string[]` |
+| steps | `steps: string[]` |
+| testData | `testData: string` |
+| expectedResult | `expectedResult: string` |
+| priority | `priority: &#39;high&#39; \| &#39;medium&#39; \| &#39;low&#39;` |
+| tag | `tag: string` |
+| testValue | `testValue: string \| number` |
+### BvaEngine
+
+| Miembro | Declaración |
+|---|---|
+| calculate | `calculate(variable: BvaVariableInput): BvaCalculatedCase[]` |
+| calculateMultivariate | `calculateMultivariate(varA: { name: string; value: number; label: string }, varB: { name: string; value: number; label: string }, relation: &#39;LESS_THAN&#39; \| &#39;LESS_EQUAL&#39; \| &#39;SUM_LESS_EQUAL&#39;, limit?: number): BvaCalculatedCase[]` |
+| calculateStringLengthBva | `calculateStringLengthBva(variable: BvaVariableInput): BvaCalculatedCase[]` |
+
+## backend/src/core/test-design/formal-methods.ts
+
+### FormalGeneratedCase
+
+| Miembro | Declaración |
+|---|---|
+| type | `type: &#39;positive&#39; \| &#39;negative&#39; \| &#39;alternative&#39; \| &#39;boundary&#39; \| &#39;validation&#39;` |
+| title | `title: string` |
+| preconditions | `preconditions: string[]` |
+| steps | `steps: string[]` |
+| testData | `testData: string` |
+| expectedResult | `expectedResult: string` |
+| priority | `priority: &#39;high&#39; \| &#39;medium&#39; \| &#39;low&#39;` |
+| technique | `technique: string` |
+### DecisionCondition
+
+| Miembro | Declaración |
+|---|---|
+| id | `id: string` |
+| label | `label: string` |
+### DecisionAction
+
+| Miembro | Declaración |
+|---|---|
+| id | `id: string` |
+| label | `label: string` |
+### DecisionTableEngine
+
+| Miembro | Declaración |
+|---|---|
+| generate | `generate(conditions: DecisionCondition[], actions: DecisionAction[], requirementTitle = &#39;Requisito&#39;): FormalGeneratedCase[]` |
+### StateTransition
+
+| Miembro | Declaración |
+|---|---|
+| from | `from: string` |
+| to | `to: string` |
+| event | `event: string` |
+| action | `action: string` |
+### StateTransitionEngine
+
+| Miembro | Declaración |
+|---|---|
+| generate | `generate(states: string[], validTransitions: StateTransition[], requirementTitle = &#39;Entidad&#39;): FormalGeneratedCase[]` |
+### ParameterOption
+
+| Miembro | Declaración |
+|---|---|
+| param | `param: string` |
+| values | `values: string[]` |
+### PairwiseEngine
+
+| Miembro | Declaración |
+|---|---|
+| generate | `generate(parameters: ParameterOption[], requirementTitle = &#39;Configuración&#39;): FormalGeneratedCase[]` |
+### ErrorGuessingEngine
+
+| Miembro | Declaración |
+|---|---|
+| generate | `generate(entityName: string): FormalGeneratedCase[]` |
+### ClassificationClass
+
+| Miembro | Declaración |
+|---|---|
+| name | `name: string` |
+| elements | `elements: string[]` |
+### ClassificationTreeEngine
+
+| Miembro | Declaración |
+|---|---|
+| generate | `generate(classes: ClassificationClass[], requirementTitle = &#39;Funcionalidad&#39;): FormalGeneratedCase[]` |
+### UseCaseInput
+
+| Miembro | Declaración |
+|---|---|
+| name | `name: string` |
+| actor | `actor: string` |
+| happyPathSteps | `happyPathSteps: string[]` |
+| alternativeFlows | `alternativeFlows: { name: string; condition: string; steps: string[] }[]` |
+| exceptionFlows | `exceptionFlows: { name: string; trigger: string; steps: string[]; expectedError: string }[]` |
+### UseCaseEngine
+
+| Miembro | Declaración |
+|---|---|
+| generate | `generate(uc: UseCaseInput): FormalGeneratedCase[]` |
+
+## backend/src/core/test-design/gherkin-compiler.ts
+
+### GherkinScenarioBlock
+
+| Miembro | Declaración |
+|---|---|
+| name | `name: string` |
+| given | `given: string[]` |
+| when | `when: string[]` |
+| then | `then: string[]` |
+| typeHint | `typeHint: ScenarioType \| null` |
+| rawText | `rawText: string` |
+### CompiledScenarioCase
+
+| Miembro | Declaración |
+|---|---|
+| title | `title: string` |
+| type | `type: ScenarioType` |
+| preconditions | `preconditions: string[]` |
+| steps | `steps: string[]` |
+| expectedResult | `expectedResult: string` |
+| evidenceText | `evidenceText: string` |
+### GherkinFormatScenario
+
+| Miembro | Declaración |
+|---|---|
+| name | `name: string` |
+| type | `type: ScenarioType` |
+| given | `given: string[]` |
+| when | `when: string[]` |
+| then | `then: string[]` |
+### GherkinCompiler
+
+| Miembro | Declaración |
+|---|---|
+| SCENARIO_REGEX | `SCENARIO_REGEX: tipo inferido` |
+| GIVEN_REGEX | `GIVEN_REGEX: tipo inferido` |
+| WHEN_REGEX | `WHEN_REGEX: tipo inferido` |
+| THEN_REGEX | `THEN_REGEX: tipo inferido` |
+| AND_REGEX | `AND_REGEX: tipo inferido` |
+| TYPE_COMMENT_REGEX | `TYPE_COMMENT_REGEX: tipo inferido` |
+| parse | `parse(text: string, fallbackName = &#39;Escenario principal&#39;): GherkinScenarioBlock[]` |
+| inferType | `inferType(block: GherkinScenarioBlock): ScenarioType` |
+| compile | `compile(text: string, options: { titlePrefix?: string; fallbackName?: string } = {}): CompiledScenarioCase[]` |
+| format | `format(scenarios: GherkinFormatScenario[]): string` |
+| sentence | `sentence(fragment: string): string` |
+
+## backend/src/core/test-design/requirements-quality-gate.ts
+
+### AmbiguityMatch
+
+| Miembro | Declaración |
+|---|---|
+| term | `term: string` |
+| category | `category: &#39;subjective_adjective&#39; \| &#39;vague_adverb&#39; \| &#39;open_clause&#39; \| &#39;non_verifiable&#39;` |
+| suggestion | `suggestion: string` |
+| foundIn | `foundIn: &#39;title&#39; \| &#39;description&#39; \| &#39;acceptanceCriteria&#39;` |
+### QualityGateEvaluation
+
+| Miembro | Declaración |
+|---|---|
+| testabilityScore | `testabilityScore: number` |
+| testabilityLevel | `testabilityLevel: &#39;EXCELLENT&#39; \| &#39;GOOD&#39; \| &#39;NEEDS_IMPROVEMENT&#39; \| &#39;POOR&#39;` |
+| recommendedTechnique | `recommendedTechnique: {
+    key: &#39;BVA&#39; \| &#39;DECISION_TABLE&#39; \| &#39;STATE_TRANSITION&#39; \| &#39;EQUIVALENCE_PARTITIONING&#39; \| &#39;TEMPLATE&#39;;
+    name: string;
+    rationale: string;
+  }` |
+| syntaxAnalysis | `syntaxAnalysis: {
+    hasActor: boolean;
+    hasAction: boolean;
+    hasOutcome: boolean;
+    hasGivenWhenThen: boolean;
+    hasQuantitativeCriteria: boolean;
+  }` |
+| ambiguities | `ambiguities: AmbiguityMatch[]` |
+| strengths | `strengths: string[]` |
+| improvements | `improvements: string[]` |
+### RequirementsQualityGate
+
+| Miembro | Declaración |
+|---|---|
+| VAGUE_TERMS_CATALOG | `VAGUE_TERMS_CATALOG: Array&lt;{
+    regex: RegExp;
+    term: string;
+    category: AmbiguityMatch[&#39;category&#39;];
+    suggestion: string;
+  }&gt;` |
+| evaluate | `evaluate(requirement: {
+    title: string;
+    description?: string \| null;
+    acceptanceCriteria?: string \| null;
+  }): QualityGateEvaluation` |
+| parseEarsSyntax | `parseEarsSyntax(text: string): {
+    pattern: &#39;UBIQUITOUS&#39; \| &#39;EVENT_DRIVEN&#39; \| &#39;STATE_DRIVEN&#39; \| &#39;UNWANTED_BEHAVIOUR&#39; \| &#39;OPTIONAL&#39; \| &#39;NON_EARS&#39;;
+    clause: string;
+    action: string;
+  }` |
+| compileGherkinToTestCases | `compileGherkinToTestCases(gherkinText: string, reqTitle = &#39;Requisito&#39;): Array&lt;{
+    title: string;
+    preconditions: string[];
+    steps: string[];
+    expectedResult: string;
+    type: &#39;positive&#39; \| &#39;negative&#39;;
+  }&gt;` |
+| extractDeterministicVariables | `extractDeterministicVariables(text: string): Array&lt;{
+    name: string;
+    type: &#39;integer&#39; \| &#39;decimal&#39; \| &#39;string_length&#39;;
+    min: number;
+    max: number;
+    unit?: string;
+  }&gt;` |
+| analyzeRfc2119Priority | `analyzeRfc2119Priority(text: string): &#39;high&#39; \| &#39;medium&#39; \| &#39;low&#39;` |
+| detectCrossRequirementDependencies | `detectCrossRequirementDependencies(text: string): string[]` |
+| transformUserStoryToRoleMatrix | `transformUserStoryToRoleMatrix(userStory: string): Array&lt;{
+    role: string;
+    isAuthorized: boolean;
+    title: string;
+    expectedStatus: number;
+    description: string;
+  }&gt;` |
+
+## backend/src/core/test-design/shared-steps.ts
+
+### SharedStepsEngine
+
+| Miembro | Declaración |
+|---|---|
+| SHARED_BLOCKS | `SHARED_BLOCKS: Record&lt;string, string[]&gt;` |
+| expandSteps | `expandSteps(steps: string[]): string[]` |
+| listAvailableSharedSteps | `listAvailableSharedSteps(): Array&lt;{ macro: string; steps: string[] }&gt;` |
+
+## backend/src/core/test-design/synthetic-data.ts
+
+### SyntheticDataEngine
+
+| Miembro | Declaración |
+|---|---|
+| validateLuhn | `validateLuhn(cardNumber: string): boolean` |
+| generateLuhnCard | `generateLuhnCard(brand: &#39;visa&#39; \| &#39;mastercard&#39; \| &#39;amex&#39; \| &#39;diners&#39; \| &#39;jcb&#39; = &#39;visa&#39;, isValid = true): { cardNumber: string; brand: string; isValid: boolean; expDate: string; cvv: string }` |
+| generateDni | `generateDni(isValid = true): { dni: string; isValid: boolean }` |
+| validateRuc | `validateRuc(ruc: string): boolean` |
+| generateRuc | `generateRuc(type: &#39;natural&#39; \| &#39;juridica&#39; = &#39;juridica&#39;, isValid = true): { ruc: string; type: string; isValid: boolean; description: string }` |
+| validateRutChile | `validateRutChile(rut: string): boolean` |
+| generateRutChile | `generateRutChile(isValid = true): { rut: string; isValid: boolean }` |
+| generateRfcMexico | `generateRfcMexico(type: &#39;fisica&#39; \| &#39;moral&#39; = &#39;moral&#39;, isValid = true): { rfc: string; isValid: boolean }` |
+| generateCurpMexico | `generateCurpMexico(isValid = true): { curp: string; isValid: boolean }` |
+| validateCuitArgentina | `validateCuitArgentina(cuit: string): boolean` |
+| generateCuitArgentina | `generateCuitArgentina(isValid = true): { cuit: string; isValid: boolean }` |
+| validateNifSpain | `validateNifSpain(nif: string): boolean` |
+| generateNifSpain | `generateNifSpain(isValid = true): { nif: string; isValid: boolean }` |
+| getCriticalBoundaryDates | `getCriticalBoundaryDates(): Record&lt;string, { label: string; value: string; type: string; description: string }&gt;` |
+| getPassiveSecurityPayloads | `getPassiveSecurityPayloads(): Record&lt;string, { label: string; payload: string; category: string; description: string }&gt;` |
+| getBoundaryDataSet | `getBoundaryDataSet(maxLength = 255): Record&lt;string, { label: string; value: string; type: string; purpose: string }&gt;` |
+| getBoundaryGeoCoordinates | `getBoundaryGeoCoordinates(): Record&lt;string, { label: string; lat: number; lng: number; isValid: boolean; description: string }&gt;` |
+| getSyntheticFiles | `getSyntheticFiles(): Record&lt;string, { filename: string; mimeType: string; sizeBytes: number; base64: string; purpose: string }&gt;` |
+| getNetworkData | `getNetworkData(): Record&lt;string, { label: string; value: string; family: &#39;IPv4&#39; \| &#39;IPv6&#39;; type: string; purpose: string }&gt;` |
+| getSyntheticEmail | `getSyntheticEmail(isValid = true): string` |
+
+## backend/src/core/validation/ai-output.validator.ts
+
+### validateAIResponse
+
+`export function validateAIResponse(jsonText: string): ValidatedAIOutput`
+
+
+## backend/src/infrastructure/importers/openapi-importer.service.ts
+
+### OpenApiEndpointCase
+
+| Miembro | Declaración |
+|---|---|
+| endpoint | `endpoint: string` |
+| method | `method: string` |
+| summary | `summary: string` |
+| expectedStatus | `expectedStatus: string` |
+| title | `title: string` |
+| type | `type: &#39;positive&#39; \| &#39;negative&#39; \| &#39;boundary&#39;` |
+### OpenApiImporterService
+
+| Miembro | Declaración |
+|---|---|
+| importOpenApiSpec | `importOpenApiSpec(projectId: string, openApiJson: Record&lt;string, unknown&gt;): retorno inferido` |
+
+## backend/src/infrastructure/repositories/prisma-project.repository.ts
+
+### PrismaProjectRepository
+
+| Miembro | Declaración |
+|---|---|
+| findById | `findById(id: string): Promise&lt;ProjectEntity \| null&gt;` |
+| findByOwner | `findByOwner(ownerId: string, options?: PaginationOptions): Promise&lt;PaginatedResult&lt;ProjectEntity&gt;&gt;` |
+| create | `create(project: ProjectEntity): Promise&lt;ProjectEntity&gt;` |
+| update | `update(id: string, data: Partial&lt;ProjectEntity&gt;): Promise&lt;ProjectEntity&gt;` |
+| archive | `archive(id: string): Promise&lt;boolean&gt;` |
+| delete | `delete(id: string): Promise&lt;boolean&gt;` |
+
+## backend/src/infrastructure/repositories/prisma-requirement.repository.ts
+
+### PrismaRequirementRepository
+
+| Miembro | Declaración |
+|---|---|
+| findById | `findById(id: string): Promise&lt;RequirementEntity \| null&gt;` |
+| findByProjectId | `findByProjectId(projectId: string, options?: PaginationOptions, statusFilter?: string): Promise&lt;PaginatedResult&lt;RequirementEntity&gt;&gt;` |
+| save | `save(requirement: RequirementEntity): Promise&lt;void&gt;` |
+| createVersion | `createVersion(requirementId: string, authorId: string, summary: string): Promise&lt;number&gt;` |
+| delete | `delete(id: string): Promise&lt;boolean&gt;` |
+
+## backend/src/infrastructure/repositories/prisma-test-case.repository.ts
+
+### PrismaTestCaseRepository
+
+| Miembro | Declaración |
+|---|---|
+| reviewsInclude | `reviewsInclude: tipo inferido` |
+| findById | `findById(id: string): Promise&lt;TestCaseEntity \| null&gt;` |
+| findByRequirementId | `findByRequirementId(requirementId: string): Promise&lt;TestCaseEntity[]&gt;` |
+| findByProjectId | `findByProjectId(projectId: string, options?: PaginationOptions): Promise&lt;PaginatedResult&lt;TestCaseEntity&gt;&gt;` |
+| save | `save(testCase: TestCaseEntity): Promise&lt;void&gt;` |
+| saveBatch | `saveBatch(testCases: TestCaseEntity[]): Promise&lt;void&gt;` |
+| delete | `delete(id: string): Promise&lt;boolean&gt;` |
+
+## backend/src/infrastructure/repositories/prisma-test-run.repository.ts
+
+### PrismaTestRunRepository
+
+| Miembro | Declaración |
+|---|---|
+| findById | `findById(id: string): Promise&lt;TestRunEntity \| null&gt;` |
+| findByProjectId | `findByProjectId(projectId: string): Promise&lt;TestRunEntity[]&gt;` |
+| create | `create(run: TestRunEntity, initialCases: Array&lt;{ testCaseId: string; code: string; title: string }&gt;): Promise&lt;TestRunEntity&gt;` |
+| recordExecution | `recordExecution(runId: string, caseId: string, status: string, durationSeconds: number, evidenceText?: string, executedBy?: string): Promise&lt;TestExecutionResultProps&gt;` |
+| logDefect | `logDefect(runId: string, caseId: string, defectNotes: string): Promise&lt;TestExecutionResultProps&gt;` |
+
+## backend/src/infrastructure/webhooks/webhook.service.ts
+
+### WebhookEventPayload
+
+| Miembro | Declaración |
+|---|---|
+| event | `event: &#39;REQUIREMENT_APPROVED_100&#39; \| &#39;TEST_RUN_COMPLETED&#39; \| &#39;DEFECT_LOGGED&#39;` |
+| projectId | `projectId: string` |
+| projectName | `projectName: string` |
+| summary | `summary: string` |
+| details | `details: Record&lt;string, unknown&gt;` |
+| timestamp | `timestamp: string` |
+### OutgoingWebhookService
+
+| Miembro | Declaración |
+|---|---|
+| isSafeUrl | `isSafeUrl(targetUrl: string): boolean` |
+| dispatch | `dispatch(url: string, payload: WebhookEventPayload): Promise&lt;boolean&gt;` |
+
+## backend/src/modules/export/export.service.ts
+
+### ExportTestCase
+
+| Miembro | Declaración |
+|---|---|
+| code | `code: string` |
+| type | `type: string` |
+| title | `title: string` |
+| preconditions | `preconditions: unknown` |
+| steps | `steps: unknown` |
+| testData | `testData: string \| null` |
+| expectedResult | `expectedResult: string` |
+| priority | `priority: string` |
+| evidenceStatus | `evidenceStatus: string` |
+| evidenceText | `evidenceText: string \| null` |
+| status | `status: string` |
+| version | `version: number` |
+| requirementVersion | `requirementVersion: number` |
+### ExportRequirement
+
+| Miembro | Declaración |
+|---|---|
+| id | `id: string` |
+| code | `code: string` |
+| title | `title: string` |
+| description | `description: string` |
+| acceptanceCriteria | `acceptanceCriteria: string` |
+| version | `version: number` |
+| testCases | `testCases: ExportTestCase[]` |
+### ExportProject
+
+| Miembro | Declaración |
+|---|---|
+| id | `id: string` |
+| name | `name: string` |
+| description | `description: string \| null` |
+| requirements | `requirements: ExportRequirement[]` |
+### parseArray
+
+`function parseArray(val: unknown): string[]`
+
+### calculateSuiteSha256
+
+`export function calculateSuiteSha256(project: ExportProject): string`
+
+### buildCsv
+
+`export function buildCsv(project: ExportProject): string`
+
+### buildMarkdown
+
+`export function buildMarkdown(project: ExportProject): string`
+
+### buildJson
+
+`export function buildJson(project: ExportProject)`
+
+### buildGherkin
+
+`export function buildGherkin(project: ExportProject): string`
+
+### buildXrayJson
+
+`export function buildXrayJson(project: ExportProject)`
+
+### buildTestRailCsv
+
+`export function buildTestRailCsv(project: ExportProject): string`
+
+### buildIEEE829TestPlan
+
+`export function buildIEEE829TestPlan(project: ExportProject): string`
+
+### buildReportHtml
+
+`export function buildReportHtml(project: ExportProject): string`
+
+### safeFilename
+
+`export function safeFilename(name: string): string`
+
+
+## backend/src/modules/metrics/metrics.service.ts
+
+### TestCaseMetricInput
+
+| Miembro | Declaración |
+|---|---|
+| status | `status: string` |
+| evidenceStatus | `evidenceStatus: string` |
+| type | `type: string` |
+| source | `source: string` |
+| isObsolete | `isObsolete: boolean` |
+### AiGenerationMetricInput
+
+| Miembro | Declaración |
+|---|---|
+| inputTokens | `inputTokens: number` |
+| outputTokens | `outputTokens: number` |
+| estimatedCost | `estimatedCost: number \| null` |
+| responseTimeMs | `responseTimeMs: number` |
+| status | `status: string` |
+| requirementId | `requirementId: string` |
+### RequirementMetricInput
+
+| Miembro | Declaración |
+|---|---|
+| id | `id: string` |
+| status | `status: string` |
+| testCases | `testCases: TestCaseMetricInput[]` |
+| aiGenerations | `aiGenerations: AiGenerationMetricInput[]` |
+### ProjectMetricInput
+
+| Miembro | Declaración |
+|---|---|
+| id | `id: string` |
+| name | `name: string` |
+| requirements | `requirements: RequirementMetricInput[]` |
+### computeProjectMetrics
+
+`export function computeProjectMetrics(project: ProjectMetricInput)`
+
+
+## backend/src/modules/requirements/ambiguity-detector.ts
+
+### AmbiguityIssue
+
+| Miembro | Declaración |
+|---|---|
+| rule | `rule: string` |
+| category | `category: &#39;VAGUE_TERM&#39; \| &#39;UNVERIFIABLE&#39; \| &#39;COMPOUND&#39; \| &#39;MISSING_ACTOR&#39;` |
+| severity | `severity: &#39;HIGH&#39; \| &#39;MEDIUM&#39; \| &#39;LOW&#39;` |
+| snippet | `snippet: string` |
+| explanation | `explanation: string` |
+| suggestion | `suggestion: string` |
+### AmbiguityAnalysisResult
+
+| Miembro | Declaración |
+|---|---|
+| hasWarnings | `hasWarnings: boolean` |
+| warningsCount | `warningsCount: number` |
+| issues | `issues: AmbiguityIssue[]` |
+### AmbiguityDetector
+
+| Miembro | Declaración |
+|---|---|
+| VAGUE_TERMS | `VAGUE_TERMS: tipo inferido` |
+| analyze | `analyze(description: string, acceptanceCriteria: string): AmbiguityAnalysisResult` |
+
+## backend/src/modules/requirements/import.service.ts
+
+### RowValidationError
+
+| Miembro | Declaración |
+|---|---|
+| rowNumber | `rowNumber: number` |
+| code | `code: string` |
+| field | `field: string` |
+| message | `message: string` |
+### ImportPreviewResult
+
+| Miembro | Declaración |
+|---|---|
+| totalRows | `totalRows: number` |
+| validRows | `validRows: RequirementImportRow[]` |
+| errors | `errors: RowValidationError[]` |
+| isValid | `isValid: boolean` |
+### RequirementImportService
+
+| Miembro | Declaración |
+|---|---|
+| parseCsv | `parseCsv(csvText: string): string[][]` |
+| previewCsv | `previewCsv(csvContent: string): ImportPreviewResult` |
+| previewJson | `previewJson(data: unknown[]): ImportPreviewResult` |
+
+## backend/src/modules/test-cases/duplicate-detector.ts
+
+### TestCaseComparable
+
+| Miembro | Declaración |
+|---|---|
+| id | `id: string` |
+| code | `code: string` |
+| title | `title: string` |
+| steps | `steps: string[] \| string` |
+| expectedResult | `expectedResult: string` |
+### DuplicateCandidate
+
+| Miembro | Declaración |
+|---|---|
+| caseCodeA | `caseCodeA: string` |
+| caseCodeB | `caseCodeB: string` |
+| caseTitleA | `caseTitleA: string` |
+| caseTitleB | `caseTitleB: string` |
+| similarityScore | `similarityScore: number` |
+| reason | `reason: &#39;EXACT_MATCH&#39; \| &#39;HIGH_SIMILARITY&#39; \| &#39;IDENTICAL_STEPS_AND_RESULT&#39;` |
+### DuplicateDetector
+
+| Miembro | Declaración |
+|---|---|
+| normalizeText | `normalizeText(text: string): string` |
+| normalizeSteps | `normalizeSteps(steps: string[] \| string): string` |
+| calculateSimilarity | `calculateSimilarity(textA: string, textB: string): number` |
+| findDuplicates | `findDuplicates(cases: TestCaseComparable[], threshold = 0.85): DuplicateCandidate[]` |
+
+## backend/src/modules/test-runs/test-runs.service.ts
+
+### TestCaseExecutionResult
+
+| Miembro | Declaración |
+|---|---|
+| testCaseId | `testCaseId: string` |
+| code | `code: string` |
+| title | `title: string` |
+| status | `status: ExecutionStatus` |
+| durationSeconds | `durationSeconds: number` |
+| executedAt | `executedAt: string \| null` |
+| executedBy | `executedBy: string \| null` |
+| evidenceText | `evidenceText: string \| null` |
+| defectNotes | `defectNotes: string \| null` |
+| defectLogged | `defectLogged: boolean` |
+### TestRun
+
+| Miembro | Declaración |
+|---|---|
+| id | `id: string` |
+| projectId | `projectId: string` |
+| name | `name: string` |
+| environment | `environment: string` |
+| createdAt | `createdAt: string` |
+| updatedAt | `updatedAt: string` |
+| status | `status: &#39;IN_PROGRESS&#39; \| &#39;COMPLETED&#39;` |
+| cases | `cases: TestCaseExecutionResult[]` |
+### toLegacyTestRun
+
+`function toLegacyTestRun(entity: TestRunEntity): TestRun`
+
+### TestRunsService
+
+| Miembro | Declaración |
+|---|---|
+| createRun | `createRun(projectId: string, name: string, environment = &#39;QA Sandbox&#39;, caseIds?: string[]): Promise&lt;TestRun&gt;` |
+| getRun | `getRun(runId: string): Promise&lt;TestRun&gt;` |
+| listRunsByProject | `listRunsByProject(projectId: string): Promise&lt;TestRun[]&gt;` |
+| recordExecution | `recordExecution(runId: string, caseId: string, status: ExecutionStatus, durationSeconds = 0, evidenceText?: string, executedBy = &#39;QA Tester&#39;): Promise&lt;TestCaseExecutionResult&gt;` |
+| logDefectFromRun | `logDefectFromRun(runId: string, caseId: string, defectNotes: string, userId: string): retorno inferido` |
+| getRunMetrics | `getRunMetrics(runId: string): retorno inferido` |
+| compareRuns | `compareRuns(runIdA: string, runIdB: string): retorno inferido` |
+</pre></html>

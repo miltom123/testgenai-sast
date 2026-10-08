@@ -1,0 +1,29 @@
+name: Análisis Snyk del proyecto
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    env:
+      SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Comprobar credencial requerida
+        run: |
+          test -n "$SNYK_TOKEN" || { echo 'Configure SNYK_TOKEN en los secretos del repositorio; análisis pendiente.' >> "$GITHUB_STEP_SUMMARY"; exit 1; }
+      - run: npm install --global snyk && npm ci --prefix backend
+      - name: Analizar código y dependencias
+        run: |
+          mkdir -p reports
+          snyk code test --json-file-output=reports/snyk-code.json
+          snyk test --file=backend/package.json --json-file-output=reports/snyk-dependencies.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: snyk-hallazgos
+          path: reports/
