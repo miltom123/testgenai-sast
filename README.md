@@ -17,3 +17,11 @@ La infraestructura Terraform verifica la aplicación en un runner efímero. No e
 Documentación generada: docs/generated/index.html.
 
 Sitio del equipo: https://testgenai-calidad.vercel.app/ (pantalla de inicio verificada; la revisión desplegada y el backend no fueron comprobados).
+
+## Publicaciones del autor
+
+Artículo individual: https://dev.to/milton_h_107ce42c1ba76290/analisis-de-seguridad-de-testgenai-con-eslint-security-y-github-actions-50p7
+
+Video público: https://youtu.be/uVTdcjrnKI0
+
+Documentación automática: https://miltom123.github.io/testgenai-sast/
